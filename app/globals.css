@@ -499,6 +499,75 @@ small {
   color: #b9f77e;
   font-size: 14px;
 }
+.quality-miss {
+  color: #ffaaa2;
+}
+.quality-good {
+  color: #b9f77e;
+}
+.quality-near-miss {
+  color: #f1c96a;
+}
+.quality-perfect {
+  color: #e8ffd5;
+  text-shadow: 0 0 16px #b9f77e88;
+}
+.tether-button {
+  min-width: 190px;
+  min-height: 54px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tether-attempts {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 4px 0 12px;
+}
+.tether-attempts svg {
+  width: 30px;
+  height: 30px;
+  color: #566276;
+  fill: #1a2433;
+  transition:
+    color 0.15s,
+    fill 0.15s,
+    transform 0.15s;
+}
+.tether-attempts svg.miss {
+  color: #ff716b;
+  fill: #c93f3a;
+  transform: scale(1.08);
+}
+.tether-attempts svg.pass {
+  color: #b9f77e;
+  fill: #74ae43;
+  transform: scale(1.08);
+}
+.result-attempts {
+  margin: 0 auto 4px;
+}
+.lock-outcome {
+  display: inline-flex;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 7px 11px;
+  margin-bottom: 14px;
+  font:
+    700 12px/1 var(--font-geist-mono),
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lock-outcome.pass {
+  color: #b9f77e;
+  background: #b9f77e12;
+}
+.lock-outcome.fail {
+  color: #ff918b;
+  background: #ff716b12;
+}
 .help-list {
   padding-left: 18px;
   color: #a5b1c5;

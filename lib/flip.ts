@@ -38,12 +38,13 @@ export function weighted<K extends string>(
  * so an encounter that ends early on three Perfects still reads as perfect.
  */
 export function qualityBand(hits: readonly Quality[]): 'low' | 'mid' | 'high' {
-  if (!hits.length) return 'low';
-  const points = hits.reduce(
+  const counted = hits.filter((hit) => hit !== 'Near Miss');
+  if (!counted.length) return 'low';
+  const points = counted.reduce(
     (sum, hit) => sum + (hit === 'Perfect' ? 2 : hit === 'Good' ? 1 : 0),
     0,
   );
-  const score = points / (hits.length * 2);
+  const score = points / (counted.length * 2);
   return score >= B.flip.bandAt.high
     ? 'high'
     : score >= B.flip.bandAt.mid

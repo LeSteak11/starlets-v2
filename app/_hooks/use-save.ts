@@ -17,6 +17,7 @@ import type { Save } from '@/lib/game';
 export function useSave() {
   const [save, setSave] = useState<Save | null>(null);
   const current = useRef<Save | null>(null);
+  const ephemeral = useRef(false);
   const [error, setError] = useState('');
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -33,9 +34,19 @@ export function useSave() {
         current.current = loaded;
         setSave(loaded);
       } catch {
-        setError(
-          'Your local save could not be loaded. Enable browser storage or reset the save in Settings to start again. Existing data has been preserved.',
-        );
+        if (process.env.NODE_ENV !== 'production') {
+          const temporary = newSave();
+          ephemeral.current = true;
+          current.current = temporary;
+          setSave(temporary);
+          setError(
+            'Development preview: browser storage is unavailable, so this session will reset when the page refreshes.',
+          );
+        } else {
+          setError(
+            'Your local save could not be loaded. Enable browser storage or reset the save in Settings to start again. Existing data has been preserved.',
+          );
+        }
       }
       setNow(Date.now());
     }, 0);
@@ -60,6 +71,13 @@ export function useSave() {
     };
   }, []);
   const update = useCallback((operation: (state: Save) => Save) => {
+    if (ephemeral.current) {
+      if (!current.current) return;
+      const next = operation(current.current);
+      current.current = next;
+      setSave(next);
+      return;
+    }
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       const previous = raw ? parseSave(raw) : current.current;
@@ -76,6 +94,12 @@ export function useSave() {
     }
   }, []);
   const restart = useCallback(() => {
+    if (ephemeral.current) {
+      const s = newSave();
+      current.current = s;
+      setSave(s);
+      return true;
+    }
     try {
       const s = newSave();
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));

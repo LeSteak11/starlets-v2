@@ -6,6 +6,7 @@ import {
   Gem,
   Radar,
   Sparkles,
+  Star,
   Zap,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
@@ -46,6 +47,9 @@ export function ScanScreen({
   setSettings: (open: boolean) => void;
 }) {
   const granted = e?.granted ? CATALOGUE.get(e.granted) : null;
+  const lockPassed = e?.hits.some((hit) => hit === 'Good' || hit === 'Perfect');
+  const countedLockHits =
+    e?.hits.filter((hit) => hit !== 'Near Miss').slice(0, 3) ?? [];
   return (
     <section className="scanner-layout">
       <div className="scanner-stage">
@@ -120,7 +124,7 @@ export function ScanScreen({
                   ? 'Free encounter · Assisted capture · +1 Spark reward'
                   : (state?.sparks ?? 0) < 1
                     ? `Next Spark in ${countdown}m. This signal will wait for you.`
-                    : '4 tethers · Accuracy strengthens the connection'}
+                    : '3 attempts · Yellow near misses retry for free'}
               </small>
             </div>
           </>
@@ -131,9 +135,15 @@ export function ScanScreen({
             encounter={e}
             slow={state?.slowTiming ?? false}
             paused={paused}
-            onTether={(angle) =>
+            onTether={(angle, targetAngle) =>
               update((s) => {
-                const next = tether(s, angle);
+                const next = tether(
+                  s,
+                  angle,
+                  Date.now(),
+                  Math.random,
+                  targetAngle,
+                );
                 const result = next.encounter;
                 const card = result?.granted
                   ? CATALOGUE.get(result.granted)
@@ -166,6 +176,30 @@ export function ScanScreen({
               />
             </div>
             <div className="scanner-caption" aria-live="polite">
+              <div className={`lock-outcome ${lockPassed ? 'pass' : 'fail'}`}>
+                Signal Lock {lockPassed ? 'passed' : 'failed'}
+              </div>
+              <div
+                className="tether-attempts result-attempts"
+                aria-label="Signal Lock attempts"
+              >
+                {[0, 1, 2].map((index) => {
+                  const hit = countedLockHits[index];
+                  return (
+                    <Star
+                      key={index}
+                      aria-hidden="true"
+                      className={
+                        hit === 'Miss'
+                          ? 'miss'
+                          : hit === 'Good' || hit === 'Perfect'
+                            ? 'pass'
+                            : 'open'
+                      }
+                    />
+                  );
+                })}
+              </div>
               <p className="eyebrow">
                 {e.newSlot
                   ? 'NEW STARBOOK ENTRY'
@@ -257,8 +291,8 @@ export function ScanScreen({
           {e?.stage === 'lock' ? (
             <>
               <p>
-                Four tethers. Bright green is Perfect. The target shifts after
-                every shot.
+                Land one tether in green to pass. Yellow is a free retry;
+                outside yellow spends an attempt.
               </p>
               <p>
                 You always come away with a card. Accuracy decides which of this

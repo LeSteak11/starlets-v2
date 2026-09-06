@@ -8,17 +8,28 @@ export const BALANCE = {
     introReward: 1,
   },
   capture: {
-    tethers: 4,
-    threshold: 80,
-    perfectWindow: 13,
-    goodWindow: 38,
+    /** Misses available while trying to secure one green-window lock. */
+    tethers: 3,
+    threshold: 60,
+    /** Half-widths in degrees. Slow Timing deliberately restores a wider read. */
+    perfectWindow: 9,
+    goodWindow: 28,
+    slowPerfectWindow: 13,
+    slowGoodWindow: 38,
+    nearMissWindow: 45,
+    slowNearMissWindow: 55,
     perfect: 32,
     good: 23,
     miss: 5,
     variance: 3,
-    cooldownMs: 650,
-    orbitMs: 2600,
-    slowOrbitMs: 4500,
+    /** One full clockwise revolution. The target is always the slower mover. */
+    orbitMs: 1500,
+    targetOrbitMs: 4200,
+    slowOrbitMs: 2600,
+    slowTargetOrbitMs: 6200,
+    /** Event de-duplication only; never disables or visually delays the control. */
+    inputGuardMs: 100,
+    maxRecordedInputs: 1000,
   },
   /** Card-grant payout is based on the awarded printing's rarity. */
   stardust: {

@@ -23,7 +23,7 @@ export type OwnedCard = {
   source: OwnedSource;
   favorite: boolean;
 };
-export type Quality = 'Miss' | 'Good' | 'Perfect';
+export type Quality = 'Miss' | 'Near Miss' | 'Good' | 'Perfect';
 export type Encounter = {
   speciesId: string;
   stage: 'signal' | 'lock' | 'result';
@@ -186,34 +186,60 @@ export function beginEncounter(save: Save, now = Date.now()): Save {
     encounter: { ...e, stage: 'lock' },
   };
 }
-export function qualityAt(angle: number, target: number): Quality {
+export function qualityAt(
+  angle: number,
+  target: number,
+  slow = false,
+): Quality {
   const delta = Math.abs(((angle - target + 540) % 360) - 180);
-  return delta <= B.capture.perfectWindow
+  const perfectWindow = slow
+    ? B.capture.slowPerfectWindow
+    : B.capture.perfectWindow;
+  const goodWindow = slow ? B.capture.slowGoodWindow : B.capture.goodWindow;
+  return delta <= perfectWindow
     ? 'Perfect'
-    : delta <= B.capture.goodWindow
+    : delta <= goodWindow
       ? 'Good'
-      : 'Miss';
+      : delta <=
+          (slow ? B.capture.slowNearMissWindow : B.capture.nearMissWindow)
+        ? 'Near Miss'
+        : 'Miss';
 }
+export const successfulTethers = (hits: readonly Quality[]) =>
+  hits.filter((hit) => hit === 'Good' || hit === 'Perfect').length;
+export const spentTetherAttempts = (hits: readonly Quality[]) =>
+  hits.filter((hit) => hit === 'Miss').length;
 export function tether(
   save: Save,
   angle: number,
   now = Date.now(),
   rng = Math.random,
+  targetAngle = save.encounter?.target ?? 0,
 ): Save {
   const e = save.encounter;
   if (!e || e.stage !== 'lock' || !Number.isFinite(angle)) return save;
-  const quality = qualityAt(((angle % 360) + 360) % 360, e.target);
-  const gain =
-    B.capture[quality.toLowerCase() as 'miss' | 'good' | 'perfect'] +
-    e.rolls[e.hits.length];
+  const normalizedTarget = ((targetAngle % 360) + 360) % 360;
+  const quality = qualityAt(
+    ((angle % 360) + 360) % 360,
+    normalizedTarget,
+    save.slowTiming,
+  );
+  const spent = spentTetherAttempts(e.hits);
+  const successful = quality === 'Good' || quality === 'Perfect';
+  const counted = successful || quality === 'Miss';
+  const gain = counted
+    ? B.capture[quality.toLowerCase() as 'miss' | 'good' | 'perfect'] +
+      e.rolls[Math.min(spent, e.rolls.length - 1)]
+    : 0;
   const hits = [...e.hits, quality];
   const rawMeter = e.meter + gain;
-  const done = hits.length >= B.capture.tethers;
+  const done =
+    successful || (quality === 'Miss' && spent + 1 >= B.capture.tethers);
   const next: Encounter = {
     ...e,
     hits,
     meter: Math.min(B.capture.threshold, rawMeter),
-    target: (e.target + 83) % 360,
+    target: normalizedTarget,
     stage: done ? 'result' : 'lock',
   };
   if (!done) return { ...save, encounter: next };
@@ -466,7 +492,7 @@ export function parseSave(raw: string): Save {
   };
   // Phase 2 v3 saves are upgraded in place. Collection and economy fields are
   // copied unchanged; Expedition fields only add new state.
-  const s = (
+  let s = (
     parsed?.version === 3
       ? {
           ...parsed,
@@ -484,6 +510,32 @@ export function parseSave(raw: string): Save {
         }
       : parsed
   ) as Save;
+  // Resume encounters written by either earlier Signal Lock rule without
+  // treating the whole save as damaged or charging another Spark. A green hit
+  // in the superseded three-success draft becomes a free retry because the new
+  // one-green rule would otherwise load an already-complete lock with no grant.
+  if (
+    s?.version === 4 &&
+    s.encounter &&
+    Array.isArray(s.encounter.rolls) &&
+    [3, 4].includes(s.encounter.rolls.length)
+  ) {
+    const hits =
+      s.encounter.stage === 'lock'
+        ? s.encounter.hits.map((hit) =>
+            hit === 'Good' || hit === 'Perfect' ? 'Near Miss' : hit,
+          )
+        : s.encounter.hits;
+    s = {
+      ...s,
+      encounter: {
+        ...s.encounter,
+        rolls: s.encounter.rolls.slice(0, B.capture.tethers),
+        hits,
+        meter: Math.min(s.encounter.meter, B.capture.threshold),
+      },
+    };
+  }
   if (
     !s ||
     s.version !== 4 ||
@@ -594,15 +646,19 @@ export function parseSave(raw: string): Save {
         (n) => !integer(n, -B.capture.variance, B.capture.variance),
       ) ||
       !Array.isArray(e.hits) ||
-      e.hits.length > B.capture.tethers ||
-      e.hits.some((h) => !['Miss', 'Good', 'Perfect'].includes(h)) ||
+      e.hits.length > B.capture.maxRecordedInputs ||
+      e.hits.some(
+        (h) => !['Miss', 'Near Miss', 'Good', 'Perfect'].includes(h),
+      ) ||
       !integer(e.meter, 0, B.capture.threshold) ||
       !integer(e.reward, 0) ||
       !integer(e.sparkReward, 0) ||
       [e.intro, e.newSlot, e.duplicate].some((v) => typeof v !== 'boolean') ||
       !(e.granted === null || CATALOGUE.byId.has(e.granted)) ||
       !integer(e.shardReward, 0) ||
-      (e.stage === 'lock' && e.hits.length >= B.capture.tethers) ||
+      (e.stage === 'lock' &&
+        (successfulTethers(e.hits) > 0 ||
+          spentTetherAttempts(e.hits) >= B.capture.tethers)) ||
       (e.stage === 'result' && e.granted === null && !e.intro)
     )
       throw new Error('Damaged encounter');

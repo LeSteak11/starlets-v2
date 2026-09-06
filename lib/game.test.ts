@@ -19,6 +19,8 @@ import {
   accruePacks,
   openPack,
   applyGrant,
+  successfulTethers,
+  spentTetherAttempts,
 } from './game.ts';
 import {
   claimExpedition,
@@ -31,8 +33,11 @@ import { printingFor, qualityBand, rollPack, snapToLine } from './flip.ts';
 import type { Save } from './game.ts';
 const rng = () => 0.5;
 function finish(s: Save, perfect = false) {
-  while (s.encounter?.stage === 'lock')
-    s = tether(s, (s.encounter.target + (perfect ? 0 : 180)) % 360, 1000, rng);
+  while (s.encounter?.stage === 'lock') {
+    const misses = s.encounter.hits.filter((hit) => hit === 'Miss').length;
+    const offset = perfect ? 0 : misses < 3 ? 180 : 20;
+    s = tether(s, (s.encounter.target + offset) % 360, 1000, rng);
+  }
   return s;
 }
 function normal() {
@@ -71,6 +76,30 @@ void test('scan preview is free, start spends once, and save resumes exact activ
   s = tether(s, s.encounter!.target, 1000, rng);
   assert.deepEqual(parseSave(JSON.stringify(s)), s);
 });
+void test('older Signal Lock saves resume under the one-green rule', () => {
+  const active = beginEncounter(scan(normal(), rng, 1000), 1000);
+  const legacy = {
+    ...active,
+    encounter: {
+      ...active.encounter!,
+      rolls: [0, 0, 0, 0],
+      hits: ['Good', 'Good', 'Good'] as const,
+      meter: 69,
+    },
+  };
+  const resumed = parseSave(JSON.stringify(legacy));
+  assert.equal(resumed.sparks, active.sparks);
+  assert.equal(resumed.encounter?.stage, 'lock');
+  assert.equal(resumed.encounter?.rolls.length, 3);
+  assert.equal(successfulTethers(resumed.encounter!.hits), 0);
+  assert.equal(spentTetherAttempts(resumed.encounter!.hits), 0);
+  assert.deepEqual(resumed.encounter?.hits, [
+    'Near Miss',
+    'Near Miss',
+    'Near Miss',
+  ]);
+  assert.equal(resumed.encounter?.meter, B.capture.threshold);
+});
 void test('a bad flip still grants a card, on that species own line', () => {
   let s = normal();
   s = finish(beginEncounter(scan(s, rng, 1000), 1000));
@@ -86,6 +115,7 @@ void test('quality bands map to the species own printings, never to another anim
   assert.equal(qualityBand(['Miss', 'Miss', 'Miss', 'Miss']), 'low');
   assert.equal(qualityBand(['Good', 'Good', 'Good', 'Good']), 'mid');
   assert.equal(qualityBand(['Perfect', 'Perfect', 'Perfect']), 'high');
+  assert.equal(qualityBand(['Near Miss', 'Perfect']), 'high');
   // Glimmerelk prints rare, legendary and secret -- there is no bad one.
   const elk = CATALOGUE.lineFor('glimmerelk');
   assert.equal(snapToLine(elk, 'common'), 'rare');
@@ -144,10 +174,27 @@ void test('regeneration handles cap, remainder, overflow, and backward clock saf
 });
 void test('quality wraps at zero and respects both timing boundaries', () => {
   assert.equal(qualityAt(359, 1), 'Perfect');
-  assert.equal(qualityAt(13, 0), 'Perfect');
-  assert.equal(qualityAt(14, 0), 'Good');
-  assert.equal(qualityAt(38, 0), 'Good');
-  assert.equal(qualityAt(39, 0), 'Miss');
+  assert.equal(qualityAt(9, 0), 'Perfect');
+  assert.equal(qualityAt(10, 0), 'Good');
+  assert.equal(qualityAt(28, 0), 'Good');
+  assert.equal(qualityAt(29, 0), 'Near Miss');
+  assert.equal(qualityAt(45, 0), 'Near Miss');
+  assert.equal(qualityAt(46, 0), 'Miss');
+  assert.equal(qualityAt(13, 0, true), 'Perfect');
+  assert.equal(qualityAt(38, 0, true), 'Good');
+  assert.equal(qualityAt(39, 0, true), 'Near Miss');
+  assert.equal(qualityAt(55, 0, true), 'Near Miss');
+  assert.equal(qualityAt(56, 0, true), 'Miss');
+});
+void test('Signal Lock timing keeps one faster signal and an easier slow mode', () => {
+  assert.ok(B.capture.orbitMs < B.capture.targetOrbitMs);
+  assert.ok(B.capture.slowOrbitMs < B.capture.slowTargetOrbitMs);
+  assert.ok(B.capture.slowOrbitMs > B.capture.orbitMs);
+  assert.ok(B.capture.slowGoodWindow > B.capture.goodWindow);
+  assert.ok(B.capture.slowPerfectWindow > B.capture.perfectWindow);
+  assert.ok(B.capture.nearMissWindow > B.capture.goodWindow);
+  assert.ok(B.capture.slowNearMissWindow > B.capture.nearMissWindow);
+  assert.equal(B.capture.tethers, 3);
 });
 void test('invalid saves are rejected without replacing data', () => {
   for (const raw of [
@@ -274,28 +321,33 @@ void test('Set 01 is three pages of nine plus an unlisted secret tray', () => {
     assert.notEqual(CATALOGUE.baseFor(species.id)!.number, null);
   }
 });
-void test('four landed tethers always catch, at worst-case variance', () => {
-  const { perfect, good, miss, variance, threshold, tethers } = B.capture;
-  const points = { Perfect: perfect, Good: good, Miss: miss };
-  const worst = (seq: (keyof typeof points)[]) => {
-    let meter = 0;
-    for (const hit of seq) {
-      meter += points[hit] - variance;
-      if (meter >= threshold) return true;
-    }
-    return false;
-  };
-  // The floor of the promise: four Goods, every roll against the player.
-  assert.equal(good * tethers - variance * tethers, threshold);
-  assert.ok(worst(['Good', 'Good', 'Good', 'Good']));
-  assert.ok(worst(['Good', 'Good', 'Good', 'Perfect']));
-  assert.ok(worst(['Perfect', 'Perfect', 'Perfect']));
-  // Dropping one tether is survivable, but only with accuracy behind it.
-  assert.ok(worst(['Perfect', 'Perfect', 'Good', 'Miss']));
-  assert.ok(!worst(['Perfect', 'Good', 'Good', 'Miss']));
-  // And a genuinely bad run still fails, or accuracy would mean nothing.
-  assert.ok(!worst(['Good', 'Good', 'Good', 'Miss']));
-  assert.ok(!worst(['Miss', 'Miss', 'Miss', 'Miss']));
+void test('yellow near misses are free and one green hit passes Signal Lock', () => {
+  let save = beginEncounter(scan(normal(), rng, 1000), 1000);
+  const meterBeforeNearMiss = save.encounter!.meter;
+  save = tether(save, (save.encounter!.target + 35) % 360, 1000, rng);
+  assert.equal(save.encounter?.stage, 'lock');
+  assert.equal(successfulTethers(save.encounter!.hits), 0);
+  assert.equal(spentTetherAttempts(save.encounter!.hits), 0);
+  assert.equal(save.encounter?.hits.at(-1), 'Near Miss');
+  assert.equal(save.encounter?.meter, meterBeforeNearMiss);
+  for (let i = 0; i < 2; i++)
+    save = tether(save, (save.encounter!.target + 180) % 360, 1000, rng);
+  assert.equal(save.encounter?.stage, 'lock');
+  assert.equal(spentTetherAttempts(save.encounter!.hits), 2);
+  save = tether(save, (save.encounter!.target + 20) % 360, 1000, rng);
+  assert.equal(save.encounter?.stage, 'result');
+  assert.equal(successfulTethers(save.encounter!.hits), 1);
+  assert.equal(spentTetherAttempts(save.encounter!.hits), 2);
+  assert.ok(save.encounter?.granted);
+});
+void test('three misses fail Signal Lock but preserve the card guarantee', () => {
+  let save = beginEncounter(scan(normal(), rng, 1000), 1000);
+  for (let i = 0; i < 3; i++)
+    save = tether(save, (save.encounter!.target + 180) % 360, 1000, rng);
+  assert.equal(save.encounter?.stage, 'result');
+  assert.equal(successfulTethers(save.encounter!.hits), 0);
+  assert.equal(spentTetherAttempts(save.encounter!.hits), 3);
+  assert.ok(save.encounter?.granted);
 });
 void test('pack slots 1-3 never roll rare, and every slot is a real distribution', () => {
   assert.equal(B.packs.slots.length, B.packs.size);
