@@ -73,8 +73,8 @@ export function GameDialogs({
             rewards can exceed that cap; you keep the overflow.
           </p>
           <p className="dialog-copy">
-            Stardust: {state?.stardust ?? 0}. Training and spending arrive in a
-            later phase.
+            Stardust: {state?.stardust ?? 0}. Spending options are not yet
+            available in this build.
           </p>
           <button
             className="secondary danger"
@@ -168,8 +168,7 @@ export function GameDialogs({
                         {new Date(r.firstCaught!).toLocaleDateString()}
                       </p>
                       <small>
-                        Alternate printings, packs, and the binder arrive in
-                        later phases.
+                        Open the Binder to see every printing for this Starlet.
                       </small>
                     </>
                   )}

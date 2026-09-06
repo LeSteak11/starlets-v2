@@ -1,32 +1,51 @@
-# Starlets — Phase 1
+# Starlets
 
-Mobile-first local-save prototype: Scanner → mystery signal → timed Signal Lock → catch/Familiarity → Starbook.
+Mobile-first collection prototype set on Lunara. Players trace a mystery signal, complete a four-tether Signal Lock, receive a card, fill three binder pages, and open timed five-card packs.
 
-## Run
+## Run locally
 
-`npm install` then `npm run dev` (http://localhost:3000). `npm run build` builds the production Worker. `npm run test` verifies game rules; `npm run typecheck` checks TypeScript.
+Requires Node.js 22.13 or newer.
 
-## Current scope
+```bash
+npm install
+npm run dev
+```
 
-Three initial creatures (Mossbun, Novafox, Emberpanda), four-tether encounters, visible catch quality, deterministic Familiarity guarantee, first-catch/default Card ownership, duplicate catch records, Spark regeneration, and browser-local saves. In-flight signals, tethers, and results survive reloads. No accounts or gameplay backend. The web host serves the application only.
+The development server normally opens at `http://localhost:3000`. Use `npm run build` for a production build and `npm run start` to run the built Worker.
 
-Three introductory contacts are free and guaranteed; each grants one Spark and normal catch Stardust. Start with 6 Sparks; regenerate toward a cap of 8 every 90 minutes. Reward overflow is retained. Full Welcome Constellation narrative and Guide assist remain Phase 2. Slower timing is available before encounters. Honor reduced-motion preferences for decorative effects; the functional timing tracer stays animated.
+## Current product
 
-All gameplay tuning is in `lib/balance.ts`. Rarity is species-owned, and Cards inherit it rather than defining independent rarity or stat bonuses. Launch defaults: 9 Common / 5 Rare / 3 Epic / 1 Legendary; alternates: 3 / 2 / 1 / 0. These are future full-roster targets, not 24 implemented Cards. Base Potential and Star Rise multipliers are defined and tested for future progression; no training or battle system is exposed in Phase 1. Global and species Stardust currently record the same catch award for their eventual separate sinks.
+- Eight Starlets and 30 cards in **Lunara: First Light**
+- 27 numbered cards across three 3×3 binder pages, plus three unlisted secrets
+- Three free scripted introductory flips: Mossbun, Emberpanda, then Novafox
+- Every completed flip grants a card; tether quality influences which printing appears
+- Six starting Sparks, an eight-Spark regeneration cap, and one Spark every 90 minutes
+- One free five-card pack every 12 hours, with up to two stored
+- Duplicate copy counts, Stardust, shards, local saves, and encounter recovery
+- Published pack odds and basic console analytics hooks
 
-## Playtest
+The collection loop is playable, but Phase 2 is unfinished. Card art, crafting, Stardust spending, daily rewards, durable analytics, sharing, and a deployed playtest URL remain outstanding. There are no accounts, gameplay backend, payments, battles, or cloud saves.
 
-1. Complete the three free contacts. Verify the Spark reward, catch reveal, and Starbook entry.
-2. Scan again and begin a normal encounter. Aim for the bright green center; the target shifts after each tether.
-3. Intentionally miss four tethers. Verify +25 species Familiarity, without a catch or Stardust reward.
-4. Reload during a paid encounter or result; progress and spent Spark should persist.
-5. Review Starbook details and reset through Settings to repeat a first-session playtest.
-6. Primary validation: after the first catch, does the player voluntarily scan again? Note timing frustration, reward clarity, and desire for another discovery.
+## Project documents
 
-Automated validation covers economy, captures, duplicates, save parsing, pity guarantees, and rarity rules. Browser interaction/visual QA and the optional WebMCP read-only bridge require a suitable browser validation context; do not infer they passed from unit tests.
+- `docs/DAY-3-CURRENT-STATE.md` — authoritative dated inventory, known issues, decisions, and PM handoff
+- `docs/PHASE-2-PLAN.md` — active execution plan and completion criteria
+- `docs/CONTENT-GUIDE.md` — card and art authoring rules
+- `docs/APP-STATUS.md` — concise implementation snapshot
+- `docs/DEV-BRIEF-CONTENT-LAYER.md` — completed historical refactor brief
 
-Local storage is browser/origin-specific. Moving between local and hosted URLs uses different saves. Clearing browser data removes progress. Damaged saves are preserved until explicit reset. Multi-tab updates are synchronized through storage events, but localStorage is not a transactional database; use one active play tab.
+When older plans disagree with the code or current-state document, use the current source for behavior and the dated current-state document for scope.
 
-Deferred: full 18-species roster, progression UI, Starbond, Starguides, Trials, Habitat, Market, payments, GPS, cloud saves.
+## Checks
 
-User handoff: further testing is user-led. Mossbun and Novafox have provisional generated artwork; Emberpanda uses the Starlets symbol as a Phase 1 placeholder. This local preview has not completed production-build or browser validation.
+```bash
+npm run content:check
+npm run content:art
+npm run test
+npm run typecheck
+npm run lint
+```
+
+`npm test` runs `content:check` first. Missing art is reported without blocking content work; oversized assets and invalid content fail their respective checks. Browser feel and visual quality require owner-led playtesting and are not established by automated checks.
+
+Local saves are browser- and origin-specific. Clearing browser storage removes progress. Use one active play tab while the game remains local-only.

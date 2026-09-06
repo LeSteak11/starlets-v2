@@ -37,7 +37,7 @@ export type StarletCard = {
   illustrator: string;
   /** Bump to swap art without changing cardId. */
   version: number;
-  /** Exactly one true per species: the slot a catch fills. */
+  /** Exactly one true per species: the printing granted during its intro flip. */
   isBase: boolean;
 };
 export const FINISHES: Finish[] = ['matte', 'foil', 'fullart', 'secret'];
@@ -76,7 +76,7 @@ export function buildCatalogue(cards: readonly StarletCard[]) {
     byId,
     bySpecies,
     get: (cardId: string) => byId.get(cardId),
-    /** The card a catch grants. content:check guarantees exactly one. */
+    /** The scripted intro printing. content:check guarantees exactly one. */
     baseFor: (speciesId: string) =>
       (bySpecies.get(speciesId) ?? []).find((c) => c.isBase),
     lineFor: (speciesId: string) => bySpecies.get(speciesId) ?? [],
@@ -91,15 +91,17 @@ export type Catalogue = ReturnType<typeof buildCatalogue>;
 export type BinderPage = { zone: Zone; cards: readonly StarletCard[] };
 export function binderPages(cards: readonly StarletCard[]): BinderPage[] {
   const zones = [...new Set(SPECIES.map((s) => s.zone))] as Zone[];
-  return zones
-    .map((zone) => ({
-      zone,
-      cards: cards
-        .filter((c) => c.zone === zone && c.number !== null)
-        .sort((a, b) => a.number! - b.number!),
-    }))
-    // Pages run in card order, not roster order: page 1 is 001-009.
-    .sort((a, b) => (a.cards[0]?.number ?? 0) - (b.cards[0]?.number ?? 0));
+  return (
+    zones
+      .map((zone) => ({
+        zone,
+        cards: cards
+          .filter((c) => c.zone === zone && c.number !== null)
+          .sort((a, b) => a.number! - b.number!),
+      }))
+      // Pages run in card order, not roster order: page 1 is 001-009.
+      .sort((a, b) => (a.cards[0]?.number ?? 0) - (b.cards[0]?.number ?? 0))
+  );
 }
 /** The unlisted chase tray, in set order. */
 export const secretTray = (cards: readonly StarletCard[]) =>

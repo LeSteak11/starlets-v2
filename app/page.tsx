@@ -171,29 +171,37 @@ export default function Home() {
                   : 'DEEP SPACE SCANNER'}
           </p>
           <h1>
-            {tab === 'book'
-              ? 'Your discoveries.'
-              : e?.stage === 'lock'
-                ? 'Establish a connection.'
-                : e?.stage === 'result'
-                  ? e.newSlot
-                    ? 'A signal. A connection.'
-                    : 'Another printing.'
-                  : 'Follow the signal.'}
+            {tab === 'packs'
+              ? 'Open the next signal.'
+              : tab === 'book'
+                ? 'Your discoveries.'
+                : e?.stage === 'lock'
+                  ? 'Establish a connection.'
+                  : e?.stage === 'result'
+                    ? e.newSlot
+                      ? 'A signal. A connection.'
+                      : 'Another printing.'
+                    : 'Follow the signal.'}
           </h1>
           <p>
-            {tab === 'book'
-              ? 'Every encounter leaves a trace.'
-              : 'Something out there is waiting to be discovered.'}
+            {tab === 'packs'
+              ? 'Five printings. One card at a time.'
+              : tab === 'book'
+                ? 'Every encounter leaves a trace.'
+                : 'Something out there is waiting to be discovered.'}
           </p>
         </div>
         <span className="status">
           ●{' '}
-          {tab === 'book'
-            ? `${discovered} / ${SET_COUNT} discovered`
-            : e?.stage === 'lock'
-              ? 'Signal Lock active'
-              : 'Scanner online'}
+          {tab === 'packs'
+            ? state && state.packs.stored > 0
+              ? `${state.packs.stored} pack${state.packs.stored === 1 ? '' : 's'} ready`
+              : 'Supply timer active'
+            : tab === 'book'
+              ? `${discovered} / ${SET_COUNT} discovered`
+              : e?.stage === 'lock'
+                ? 'Signal Lock active'
+                : 'Scanner online'}
         </span>
       </section>
       {tab === 'scan' ? (

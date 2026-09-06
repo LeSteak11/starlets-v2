@@ -1,14 +1,22 @@
 # Content guide — authoring Set 01
 
 You own `content/set-01.ts`, `public/cards/`, and `public/creatures/`.
-Nothing in `lib/` needs to change to add, rename, re-rarity or re-art a card.
+Nothing in `lib/` needs to change to rename, re-rarity, or re-art an existing
+card. Expanding the locked set is a coordinated design change because pages
+must remain complete groups of nine.
 
-## Adding a card
+## Editing an existing card
 
-1. Drop the art at `public/cards/lun01/029.webp`.
-2. Append one object to `content/set-01.ts`.
+1. Drop the art at the path already declared by that card, such as
+   `public/cards/lun01/012.webp`.
+2. Edit that card's object in `content/set-01.ts`. Never change its `cardId`.
 3. Run `npm run content:check`.
-4. Reload the app — it is in the binder.
+4. Run `npm run content:art`, then reload the app.
+
+Adding a numbered card requires expanding or rebalancing complete nine-card
+pages, updating `numberMax` on every numbered and secret card, and updating the
+set targets in `lib/balance.ts`. Treat that as a set-design change, not a
+one-object append. Add a secret only when the set plan explicitly calls for it.
 
 `content/set-01.ts` holds data only: object literals, no functions, no
 conditionals, no imports beyond the `StarletCard` type. If you find yourself
@@ -16,30 +24,31 @@ wanting logic in that file, it belongs in `lib/` — ask.
 
 ## The fields
 
-| Field | Notes |
-|---|---|
-| `cardId` | `LUN-01-029`. Set and number only. **Never change or reuse one** — saves point at this string. Renumbering a card means a new `cardId`. |
-| `setId` | `LUN-01`. |
-| `number` | Binder order. Must run 1..`numberMax` with no gaps. **`null` for a secret** — secrets are unlisted, with no number and no binder slot. |
-| `numberMax` | Count of *numbered* cards, so `012/27` renders without a lookup — bump it on every card when the set grows. |
-| `speciesId` | Must exist in the roster in `lib/balance.ts`. |
-| `name` | Large type on the face. Usually the species name. |
-| `subtitle` | Small type under it. Omit on base cards. |
-| `rarity` | `common` `uncommon` `rare` `legendary` `secret`. |
-| `finish` | `matte` `foil` `fullart` `secret`. How it is printed. |
-| `role` | `base` `pose` `foil` `fullart` `secret`. What it is in the set. |
-| `art` | `/cards/lun01/029.webp`. |
-| `core` / `zone` | Copied from the species. `content:check` fails if they disagree. |
-| `illustrator` | Credit line on the card back. `TBD` until assigned. |
-| `version` | Bump to swap art without touching `cardId`. |
-| `isBase` | Exactly one `true` per species — the slot a catch fills. |
+| Field           | Notes                                                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `cardId`        | `LUN-01-012`. Set and number only. **Never change or reuse one** — saves point at this string. Renumbering a card means a new `cardId`. |
+| `setId`         | `LUN-01`.                                                                                                                               |
+| `number`        | Binder order. Must run 1..`numberMax` with no gaps. **`null` for a secret** — secrets are unlisted, with no number and no binder slot.  |
+| `numberMax`     | Count of _numbered_ cards, so `012/27` renders without a lookup — bump it on every card when the set grows.                             |
+| `speciesId`     | Must exist in the roster in `lib/balance.ts`.                                                                                           |
+| `name`          | Large type on the face. Usually the species name.                                                                                       |
+| `subtitle`      | Small type under it. Omit on base cards.                                                                                                |
+| `rarity`        | `common` `uncommon` `rare` `legendary` `secret`.                                                                                        |
+| `finish`        | `matte` `foil` `fullart` `secret`. How it is printed.                                                                                   |
+| `role`          | `base` `pose` `foil` `fullart` `secret`. What it is in the set.                                                                         |
+| `art`           | `/cards/lun01/012.webp`.                                                                                                                |
+| `core` / `zone` | Copied from the species. `content:check` fails if they disagree.                                                                        |
+| `illustrator`   | Credit line on the card back. `TBD` until assigned.                                                                                     |
+| `version`       | Bump to swap art without touching `cardId`.                                                                                             |
+| `isBase`        | Exactly one `true` per species — the slot a catch fills.                                                                                |
 
 `role` and `finish` are separate on purpose. A pose card can be printed foil.
 Do not collapse them.
 
 ## Rules `npm run content:check` enforces
 
-Errors (these fail the build):
+Errors (these make `content:check` exit unsuccessfully; `npm test` runs that
+check first, while `npm run build` does not currently invoke it):
 
 - `cardId`s are unique, `number` runs 1..`numberMax` with no gaps
 - `numberMax` matches the count of numbered cards
@@ -57,19 +66,19 @@ Warnings (these never block you):
   `BALANCE.set01.byRarity`. That target is something to balance against while
   building the set, not a tripwire.
 
-`npm run content:art` reports the same asset picture on its own: what is
-missing, what is over budget, orphaned files in `public/cards/lun01/`, and what
-the set weighs.
+`npm run content:art` reports production assets, shared placeholders, missing
+files, oversized files, orphaned files in `public/cards/lun01/`, and the weight
+of production art currently present.
 
 ## Pages
 
 Set 01 is **27 numbered cards in three fixed 3×3 pages**, one page per zone:
 
-| Page | Zone | Numbers |
-|---|---|---|
-| 1 | Moon Garden | 001–009 |
-| 2 | Crater Coast | 010–018 |
-| 3 | Prism Caves | 019–027 |
+| Page | Zone         | Numbers |
+| ---- | ------------ | ------- |
+| 1    | Moon Garden  | 001–009 |
+| 2    | Crater Coast | 010–018 |
+| 3    | Prism Caves  | 019–027 |
 
 Zones are scan flavour and page identity — not a separate collection type. A
 card's zone comes from its species, so moving a card between pages means
@@ -83,10 +92,10 @@ one card on it. Their art is `s1.webp`, `s2.webp`, `s3.webp`.
 
 ## Art specs
 
-| Asset | Size | Format | Budget |
-|---|---|---|---|
-| Card art | 1024 × 1434 (5:7 portrait) | WebP | ≤ 250 KB |
-| Catch sprite | 1024 × 1024, transparent | WebP | ≤ 250 KB |
+| Asset        | Size                       | Format | Budget   |
+| ------------ | -------------------------- | ------ | -------- |
+| Card art     | 1024 × 1434 (5:7 portrait) | WebP   | ≤ 250 KB |
+| Catch sprite | 1024 × 1024, transparent   | WebP   | ≤ 250 KB |
 
 Card art is **full-bleed** — no frame, no border, no set number burned in. The
 frame, the rarity treatment, the foil sweep and the number are all UI drawn on
@@ -102,7 +111,7 @@ the difference between a page that loads on a phone and one that does not.
 ## Converting art to spec
 
 ```bash
-npx sharp-cli --input art.png --output public/cards/lun01/029.webp resize 1024 1434 --fit cover -- webp --quality 82
+npx sharp-cli --input art.png --output public/cards/lun01/012.webp resize 1024 1434 --fit cover -- webp --quality 82
 ```
 
 Then `npm run content:art` to confirm it landed under budget.

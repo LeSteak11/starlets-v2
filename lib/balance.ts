@@ -7,7 +7,6 @@ export const BALANCE = {
     encounterCost: 1,
     introReward: 1,
   },
-  familiarity: { failure: 25, guarantee: 100 },
   capture: {
     tethers: 4,
     threshold: 80,
@@ -21,7 +20,7 @@ export const BALANCE = {
     orbitMs: 2600,
     slowOrbitMs: 4500,
   },
-  /** Catch payout is a species/rarity value. It is never a per-card field. */
+  /** Card-grant payout is based on the awarded printing's rarity. */
   stardust: {
     common: 20,
     uncommon: 30,
@@ -107,7 +106,7 @@ export const label = (value: string) => value[0].toUpperCase() + value.slice(1);
  * binder and the pack timer exist. Names and art here are placeholders pending
  * final design; the rarity spine is the lock.
  *
- * `intro` marks the three tutorial catches, in order. The mascot is deliberately
+ * `intro` marks the three tutorial flips, in order. The mascot is deliberately
  * not one of them -- players should see its silhouette for weeks.
  * `encounterWeight` biases the scan pool so rarity is felt, not just labelled.
  */
@@ -241,5 +240,5 @@ export const SPECIES = [
     catchSprite: '/creatures/placeholder.svg',
   },
 ] as const;
-/** The tutorial is three catches. It does not grow with the roster. */
+/** The tutorial is three scripted flips. It does not grow with the roster. */
 export const INTRO_SPECIES = SPECIES.filter((s) => s.intro);

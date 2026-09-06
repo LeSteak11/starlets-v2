@@ -8,14 +8,25 @@ import { SET_01 } from '../content/set-01.ts';
  */
 const kb = (bytes: number) => `${Math.round(bytes / 1024)} KB`;
 const budget = B.art.maxBytes;
-const rows: { label: string; path: string }[] = [
-  ...SET_01.map((c) => ({ label: c.cardId, path: c.art })),
-  ...SPECIES.map((s) => ({ label: `${s.id} sprite`, path: s.catchSprite })),
+const rows: { label: string; path: string; placeholder: boolean }[] = [
+  ...SET_01.map((c) => ({ label: c.cardId, path: c.art, placeholder: false })),
+  ...SPECIES.map((s) => ({
+    label: `${s.id} sprite`,
+    path: s.catchSprite,
+    placeholder: s.catchSprite === '/creatures/placeholder.svg',
+  })),
 ];
 let missing = 0;
+let placeholders = 0;
+let production = 0;
 let over = 0;
 let total = 0;
 for (const row of rows) {
+  if (row.placeholder) {
+    placeholders++;
+    console.warn(`! ${row.label.padEnd(16)} placeholder  ${row.path}`);
+    continue;
+  }
   const path = join('public', row.path.replace(/^\//, ''));
   if (!existsSync(path)) {
     missing++;
@@ -23,6 +34,7 @@ for (const row of rows) {
     continue;
   }
   const bytes = statSync(path).size;
+  production++;
   total += bytes;
   if (bytes > budget) {
     over++;
@@ -41,6 +53,6 @@ for (const file of orphans)
     `! orphan           public/cards/lun01/${file} is not referenced by any card`,
   );
 console.log(
-  `${rows.length - missing}/${rows.length} assets present, ${over} over budget, ${orphans.length} orphaned — ${kb(total)} total`,
+  `${production}/${rows.length} production assets present, ${placeholders} placeholders, ${missing} missing, ${over} over budget, ${orphans.length} orphaned — ${kb(total)} production total`,
 );
 if (over) process.exit(1);
