@@ -20,8 +20,8 @@ wanting logic in that file, it belongs in `lib/` — ask.
 |---|---|
 | `cardId` | `LUN-01-029`. Set and number only. **Never change or reuse one** — saves point at this string. Renumbering a card means a new `cardId`. |
 | `setId` | `LUN-01`. |
-| `number` | Binder order. Must run 1..`numberMax` with no gaps. |
-| `numberMax` | Set size. Every card carries it so `029/28` renders without a lookup — bump it on every card when the set grows. |
+| `number` | Binder order. Must run 1..`numberMax` with no gaps. **`null` for a secret** — secrets are unlisted, with no number and no binder slot. |
+| `numberMax` | Count of *numbered* cards, so `012/27` renders without a lookup — bump it on every card when the set grows. |
 | `speciesId` | Must exist in the roster in `lib/balance.ts`. |
 | `name` | Large type on the face. Usually the species name. |
 | `subtitle` | Small type under it. Omit on base cards. |
@@ -42,7 +42,9 @@ Do not collapse them.
 Errors (these fail the build):
 
 - `cardId`s are unique, `number` runs 1..`numberMax` with no gaps
-- `numberMax` matches the real set size
+- `numberMax` matches the count of numbered cards
+- every zone is exactly one nine-card page, numbered contiguously
+- only secrets are unlisted, and every secret is unlisted
 - exactly one `isBase` per species
 - every `speciesId` is in the roster; `core` and `zone` match that species
 - `rarity`, `finish` and `role` are valid values
@@ -59,6 +61,26 @@ Warnings (these never block you):
 missing, what is over budget, orphaned files in `public/cards/lun01/`, and what
 the set weighs.
 
+## Pages
+
+Set 01 is **27 numbered cards in three fixed 3×3 pages**, one page per zone:
+
+| Page | Zone | Numbers |
+|---|---|---|
+| 1 | Moon Garden | 001–009 |
+| 2 | Crater Coast | 010–018 |
+| 3 | Prism Caves | 019–027 |
+
+Zones are scan flavour and page identity — not a separate collection type. A
+card's zone comes from its species, so moving a card between pages means
+changing which species it belongs to, or moving a whole species' zone.
+`content:check` fails if any page is not exactly nine cards in one contiguous
+run of numbers.
+
+The three **secrets** sit outside all of this: `number: null`, no slot, no
+counter on the face. They are an unlisted chase tray, not a fourth page with
+one card on it. Their art is `s1.webp`, `s2.webp`, `s3.webp`.
+
 ## Art specs
 
 | Asset | Size | Format | Budget |
@@ -73,7 +95,7 @@ top. A frame in the file means it renders twice.
 Silhouettes for undiscovered Starlets are generated in code from the catch
 sprite. Do not draw them.
 
-Budget arithmetic: 28 cards plus 8 sprites at 250 KB is about 9 MB. At the
+Budget arithmetic: 30 cards plus 8 sprites at 250 KB is about 9.5 MB. At the
 2 MB/PNG rate the prototype started with, the same set is 72 MB. The budget is
 the difference between a page that loads on a phone and one that does not.
 

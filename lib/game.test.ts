@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
-import { binderPages, cardCounter } from './cards.ts';
+import { binderPages, cardCounter, secretTray } from './cards.ts';
 import { CATALOGUE } from './catalogue.ts';
 import { SET_01 } from '../content/set-01.ts';
 import {
@@ -128,9 +128,12 @@ void test('invalid saves are rejected without replacing data', () => {
   ])
     assert.throws(() => parseSave(raw));
 });
-void test('Set 01 holds its shape: 8 Starlets, 28 cards, one base each', () => {
+void test('Set 01 is three pages of nine plus an unlisted secret tray', () => {
   assert.equal(SPECIES.length, B.set01.species);
-  assert.equal(SET_01.length, B.set01.cards);
+  const numbered = SET_01.filter((c) => c.number !== null);
+  const secrets = secretTray(SET_01);
+  assert.equal(numbered.length, B.set01.numbered);
+  assert.equal(secrets.length, B.set01.secrets);
   assert.equal(INTRO_SPECIES.length, 3);
   // The set boss is never a tutorial catch -- it stays a silhouette for weeks.
   assert.ok(!INTRO_SPECIES.map((s) => s.id as string).includes('selenith'));
@@ -138,31 +141,60 @@ void test('Set 01 holds its shape: 8 Starlets, 28 cards, one base each', () => {
   for (const c of SET_01) counted[c.rarity] = (counted[c.rarity] ?? 0) + 1;
   assert.deepEqual(counted, { ...B.set01.byRarity });
   assert.equal(new Set(SET_01.map((c) => c.cardId)).size, SET_01.length);
-  SET_01.forEach((c, i) => {
+  numbered.forEach((c, i) => {
     assert.equal(c.number, i + 1);
-    assert.equal(c.numberMax, SET_01.length);
+    assert.equal(c.numberMax, numbered.length);
   });
+  // Every zone is exactly one 3x3 page; secrets sit on none of them.
+  const pages = binderPages(SET_01);
+  assert.equal(pages.length, 3);
+  for (const page of pages)
+    assert.equal(page.cards.length, B.set01.pageSize, page.zone);
+  assert.equal(
+    pages.reduce((n, page) => n + page.cards.length, 0),
+    numbered.length,
+  );
+  for (const secret of secrets) {
+    assert.equal(secret.number, null);
+    assert.equal(secret.rarity, 'secret');
+    assert.equal(cardCounter(secret), 'UNLISTED');
+    // Secrets are printings of somebody already in the book, never new species.
+    assert.ok(SPECIES.some((s) => s.id === secret.speciesId));
+  }
+  assert.equal(cardCounter(SET_01[0]), '001/27');
   for (const species of SPECIES) {
     const line = CATALOGUE.lineFor(species.id);
     assert.ok(line.length >= 3, species.id);
     assert.equal(line.filter((c) => c.isBase).length, 1, species.id);
     assert.equal(CATALOGUE.baseFor(species.id)!.speciesId, species.id);
+    // A catch always fills a numbered slot, never the chase tray.
+    assert.notEqual(CATALOGUE.baseFor(species.id)!.number, null);
   }
-  // Secrets are printings of somebody already in the book, never new species.
-  for (const secret of SET_01.filter((c) => c.rarity === 'secret'))
-    assert.ok(SPECIES.some((s) => s.id === secret.speciesId));
-  assert.equal(cardCounter(SET_01[0]), '001/28');
-  assert.equal(
-    binderPages(SET_01).reduce((n, page) => n + page.cards.length, 0),
-    SET_01.length,
-  );
 });
-void test('alts may outrank their base, and only 001/002/004 start common', () => {
+void test('pack slots 1-3 never roll rare, and every slot is a real distribution', () => {
+  assert.equal(B.packs.slots.length, B.packs.size);
+  for (const slot of B.packs.slots) {
+    const total = Object.values(slot).reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(total - 1) < 1e-9, JSON.stringify(slot));
+  }
+  for (const slot of B.packs.slots.slice(0, 3)) {
+    const odds = slot as Record<string, number>;
+    assert.deepEqual(Object.keys(odds), ['common', 'uncommon']);
+    // Uncommon in the floor slots, so early packs are not a five-card loop.
+    assert.ok(odds.uncommon > 0);
+  }
+  // Slot 4 keeps its meaning only if the floor slots cannot reach rare.
+  assert.ok(!('rare' in B.packs.slots[0]));
+  assert.ok('rare' in B.packs.slots[3]);
+  assert.ok('secret' in B.packs.slots[4]);
+  assert.ok(B.packs.pityVisibleFrom < B.packs.secretPity);
+});
+void test('alts may outrank their base, and only three species start common', () => {
   assert.deepEqual(
     SET_01.filter((c) => c.isBase && c.rarity === 'common').map(
       (c) => c.speciesId,
     ),
-    ['mossbun', 'emberpanda', 'dewlark'],
+    ['mossbun', 'dewlark', 'emberpanda'],
   );
   const emberpanda = CATALOGUE.lineFor('emberpanda');
   assert.equal(emberpanda.find((c) => c.isBase)!.rarity, 'common');

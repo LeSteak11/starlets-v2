@@ -16,9 +16,12 @@ export type StarletCard = {
   /** 'LUN-01-012'. Set and number only -- stable forever, never reused. */
   cardId: string;
   setId: string;
-  /** Binder order, 1-based. */
-  number: number;
-  /** Set size, so `012/28` renders without a lookup. */
+  /**
+   * Binder order, 1-based -- or null for a secret, which is an unlisted chase
+   * card with no slot in the binder and no number on its face.
+   */
+  number: number | null;
+  /** Count of numbered cards, so `012/27` renders without a lookup. */
   numberMax: number;
   speciesId: string;
   name: string;
@@ -50,10 +53,16 @@ export const CARD_ROLES: CardRole[] = [
  * `onError` falling back to this, so art can land after the card does.
  */
 export const ART_PLACEHOLDER = '/creatures/placeholder.svg';
+export const isSecret = (card: StarletCard) => card.number === null;
 export const cardCode = (card: StarletCard) =>
-  `${card.setId}/${String(card.number).padStart(3, '0')}`;
+  card.number === null
+    ? `${card.setId}/SECRET`
+    : `${card.setId}/${String(card.number).padStart(3, '0')}`;
+/** Secrets deliberately show no counter -- an unlisted card has no position. */
 export const cardCounter = (card: StarletCard) =>
-  `${String(card.number).padStart(3, '0')}/${card.numberMax}`;
+  card.number === null
+    ? 'UNLISTED'
+    : `${String(card.number).padStart(3, '0')}/${card.numberMax}`;
 export function buildCatalogue(cards: readonly StarletCard[]) {
   const byId = new Map(cards.map((c) => [c.cardId, c]));
   const bySpecies = new Map<string, StarletCard[]>();
@@ -74,12 +83,21 @@ export function buildCatalogue(cards: readonly StarletCard[]) {
   };
 }
 export type Catalogue = ReturnType<typeof buildCatalogue>;
-/** Binder pages are zones. Zone completion is a page, not a new system. */
+/**
+ * Binder pages are zones and zones are pages -- fixed 3x3, nine slots each.
+ * Zones are scan flavour and page identity, not a separate collection type.
+ * Secrets are excluded: they live in the chase tray, off the numbered pages.
+ */
 export type BinderPage = { zone: Zone; cards: readonly StarletCard[] };
 export function binderPages(cards: readonly StarletCard[]): BinderPage[] {
   const zones = [...new Set(SPECIES.map((s) => s.zone))] as Zone[];
   return zones.map((zone) => ({
     zone,
-    cards: cards.filter((c) => c.zone === zone),
+    cards: cards
+      .filter((c) => c.zone === zone && c.number !== null)
+      .sort((a, b) => a.number! - b.number!),
   }));
 }
+/** The unlisted chase tray, in set order. */
+export const secretTray = (cards: readonly StarletCard[]) =>
+  cards.filter(isSecret);

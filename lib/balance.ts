@@ -37,9 +37,34 @@ export const BALANCE = {
    */
   set01: {
     setId: 'LUN-01',
-    cards: 28,
+    /** Numbered cards only. Three pages of nine. */
+    numbered: 27,
+    /** Secrets are an unlisted chase tray, not a fourth page with one slot. */
+    secrets: 3,
     species: 8,
-    byRarity: { common: 5, uncommon: 6, rare: 9, legendary: 5, secret: 3 },
+    byRarity: { common: 5, uncommon: 7, rare: 10, legendary: 5, secret: 3 },
+    /** Fixed 3x3. Zones are the three pages; each zone holds exactly a page. */
+    pageSize: 9,
+  },
+  /**
+   * Pack structure. Five cards: slots 1-3 are the floor, slot 4 guarantees
+   * rare or better, slot 5 is the hit. Slots 1-3 roll uncommon so early packs
+   * are not a five-card loop over the only five commons in the set -- and
+   * never roll rare, so slot 4 keeps its meaning. Odds are shown on the pack
+   * screen, not buried in a menu.
+   */
+  packs: {
+    size: 5,
+    slots: [
+      { common: 0.72, uncommon: 0.28 },
+      { common: 0.72, uncommon: 0.28 },
+      { common: 0.72, uncommon: 0.28 },
+      { rare: 0.88, legendary: 0.12 },
+      { rare: 0.68, legendary: 0.28, secret: 0.04 },
+    ],
+    /** A secret is guaranteed within this many packs. Shown from pack 25. */
+    secretPity: 40,
+    pityVisibleFrom: 25,
   },
   /** Asset budgets. `npm run content:art` reports anything over. */
   art: {

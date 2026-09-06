@@ -19,20 +19,35 @@ const warn = (subject: string, message: string) =>
   warnings.push(`! ${subject.padEnd(12)} ${message}`);
 const onDisk = (path: string) => join('public', path.replace(/^\//, ''));
 const speciesById = new Map(SPECIES.map((s) => [s.id as string, s]));
-const seen = new Map<string, number>();
+const numbered = SET_01.filter((c) => c.number !== null);
+const secrets = SET_01.filter((c) => c.number === null);
+const seen = new Map<string, string>();
 for (const card of SET_01) {
   const at = card.cardId || `#${card.number}`;
-  if (seen.has(card.cardId))
-    fail(at, `duplicate cardId (also card ${seen.get(card.cardId)})`);
-  seen.set(card.cardId, card.number);
+  if (seen.has(card.cardId)) fail(at, `duplicate cardId`);
+  seen.set(card.cardId, at);
+  // A secret is unlisted: no number, and never a numbered card's rarity.
+  if (card.number === null && card.rarity !== 'secret')
+    fail(
+      at,
+      `has no number but rarity '${card.rarity}' -- only secrets are unlisted`,
+    );
+  if (card.number !== null && card.rarity === 'secret')
+    fail(
+      at,
+      `is secret but carries number ${card.number} -- secrets are unlisted`,
+    );
   if (!RARITIES.includes(card.rarity))
     fail(at, `rarity '${card.rarity}' is not a valid Rarity`);
   if (!FINISHES.includes(card.finish))
     fail(at, `finish '${card.finish}' is not a valid Finish`);
   if (!CARD_ROLES.includes(card.role))
     fail(at, `role '${card.role}' is not a valid CardRole`);
-  if (card.numberMax !== SET_01.length)
-    fail(at, `numberMax ${card.numberMax} but the set holds ${SET_01.length}`);
+  if (card.numberMax !== numbered.length)
+    fail(
+      at,
+      `numberMax ${card.numberMax} but the set numbers ${numbered.length} cards`,
+    );
   const species = speciesById.get(card.speciesId);
   if (!species) {
     fail(at, `speciesId '${card.speciesId}' is not in the roster`);
@@ -56,12 +71,24 @@ for (const card of SET_01) {
       `art is ${Math.round(statSync(onDisk(card.art)).size / 1024)} KB, budget is ${B.art.maxBytes / 1024} KB`,
     );
 }
-for (let n = 1; n <= SET_01.length; n++)
-  if (!SET_01.some((c) => c.number === n))
+for (let n = 1; n <= numbered.length; n++)
+  if (!numbered.some((c) => c.number === n))
     fail(
       'set',
-      `${SET_01.length} cards declared, number ${String(n).padStart(3, '0')} missing`,
+      `${numbered.length} cards declared, number ${String(n).padStart(3, '0')} missing`,
     );
+// Fixed 3x3: every zone is exactly one page, in one contiguous run.
+for (const zone of new Set(SPECIES.map((sp) => sp.zone))) {
+  const page = numbered.filter((c) => c.zone === zone);
+  if (page.length !== B.set01.pageSize)
+    fail(
+      'page',
+      `${zone} holds ${page.length} numbered cards, a page is ${B.set01.pageSize}`,
+    );
+  const runs = page.map((c) => c.number!).sort((a, b) => a - b);
+  if (runs.some((n, i) => i > 0 && n !== runs[i - 1] + 1))
+    fail('page', `${zone} is not a contiguous run of numbers`);
+}
 for (const species of SPECIES) {
   const bases = SET_01.filter((c) => c.speciesId === species.id && c.isBase);
   if (bases.length !== 1)
@@ -78,8 +105,13 @@ for (const species of SPECIES) {
       `catchSprite is ${Math.round(statSync(sprite).size / 1024)} KB, budget is ${B.art.maxBytes / 1024} KB`,
     );
 }
-if (SET_01.length !== B.set01.cards)
-  warn('set', `${SET_01.length} cards, design target is ${B.set01.cards}`);
+if (numbered.length !== B.set01.numbered)
+  warn(
+    'set',
+    `${numbered.length} numbered cards, design target is ${B.set01.numbered}`,
+  );
+if (secrets.length !== B.set01.secrets)
+  warn('set', `${secrets.length} secrets, design target is ${B.set01.secrets}`);
 for (const rarity of RARITIES) {
   const have = SET_01.filter((c) => c.rarity === rarity).length;
   const want = B.set01.byRarity[rarity];
@@ -91,6 +123,6 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 console.log(
   errors.length
     ? `${plural(errors.length, 'error')}, ${plural(warnings.length, 'warning')}`
-    : `Set 01 content OK - ${SET_01.length} cards, ${plural(warnings.length, 'warning')}`,
+    : `Set 01 content OK - ${numbered.length} numbered + ${secrets.length} secret, ${plural(warnings.length, 'warning')}`,
 );
 if (errors.length) process.exit(1);
