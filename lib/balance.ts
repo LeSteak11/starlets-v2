@@ -65,7 +65,7 @@ export const SPECIES = [
     encounterWeight: 26,
     lore: 'It listens through the moss on its ears. When the garden falls silent, it hears the stars.',
     signature: 'Verdant Echo',
-    art: '/creatures/mossbun.png',
+    art: '/creatures/mossbun.webp',
   },
   {
     id: 'emberpanda',
@@ -97,7 +97,7 @@ export const SPECIES = [
     encounterWeight: 9,
     lore: 'Its flowing tail traces tides that no ocean remembers. It appears where moonlight touches still water.',
     signature: 'Comet Dash',
-    art: '/creatures/novafox.png',
+    art: '/creatures/novafox.webp',
   },
   {
     id: 'dewlark',
