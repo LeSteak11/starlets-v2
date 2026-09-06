@@ -31,10 +31,12 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { BALANCE as B, SPECIES } from '@/lib/balance';
+import { BALANCE as B, SPECIES, label } from '@/lib/balance';
 import {
   newSave,
   parseSave,
+  migrateLegacySave,
+  LEGACY_SAVE_KEY,
   regenerate,
   scan,
   beginEncounter,
@@ -43,7 +45,7 @@ import {
   SAVE_KEY,
 } from '@/lib/game';
 import type { Save, Encounter } from '@/lib/game';
-const CORE_ICONS = { Grove: Leaf, Tide: Waves, Flare: Flame };
+const CORE_ICONS = { grove: Leaf, tide: Waves, flare: Flame };
 
 function SignalOrbit({
   encounter,
@@ -116,7 +118,7 @@ function SignalOrbit({
           unoptimized
           width={1024}
           height={1024}
-          src={species.art}
+          src={species.catchSprite}
           alt={species.name}
         />
         <svg className="orbit-svg" viewBox="0 0 300 300" aria-hidden="true">
@@ -216,7 +218,12 @@ export default function Home() {
     const initialize = setTimeout(() => {
       try {
         const raw = localStorage.getItem(SAVE_KEY);
-        const loaded = regenerate(raw ? parseSave(raw) : newSave());
+        // Phase 1 playtest saves are migrated forward, never discarded. The
+        // legacy key is left in place as a fallback until Phase 2 ships.
+        const legacy = raw ? null : localStorage.getItem(LEGACY_SAVE_KEY);
+        const loaded = regenerate(
+          raw ? parseSave(raw) : legacy ? migrateLegacySave(legacy) : newSave(),
+        );
         localStorage.setItem(SAVE_KEY, JSON.stringify(loaded));
         current.current = loaded;
         setSave(loaded);
@@ -301,7 +308,7 @@ export default function Home() {
                       (sp) => s.records[sp.id].caught > 0,
                     ).map((sp) => ({
                       name: sp.name,
-                      rarity: sp.rarity,
+                      rarity: label(sp.rarityBase),
                       catches: s.records[sp.id].caught,
                     })),
                     sparks: regenerate(s).sparks,
@@ -485,7 +492,7 @@ export default function Home() {
                     unoptimized
                     width={1024}
                     height={1024}
-                    src={species.art}
+                    src={species.catchSprite}
                     alt="Unidentified Starlet silhouette"
                   />
                 </div>
@@ -529,7 +536,7 @@ export default function Home() {
                     unoptimized
                     width={1024}
                     height={1024}
-                    src={species.art}
+                    src={species.catchSprite}
                     alt={species.name}
                   />
                 </div>
@@ -546,7 +553,7 @@ export default function Home() {
                   </h2>
                   <p>
                     {e.caught
-                      ? `${species.rarity} · ${species.core} Core · ${species.zone}`
+                      ? `${label(species.rarityBase)} · ${label(species.core)} Core · ${species.zone}`
                       : `${species.name} slipped away. You learned its signal.`}
                   </p>
                   <div className="reward-line">
@@ -673,7 +680,7 @@ export default function Home() {
                   <div className="card-head">
                     <span>LN / {sp.number}</span>
                     <span className="badge">
-                      {known ? sp.rarity : 'UNDISCOVERED'}
+                      {known ? label(sp.rarityBase) : 'UNDISCOVERED'}
                     </span>
                   </div>
                   <div className={`card-art ${caught ? '' : 'unseen'}`}>
@@ -681,7 +688,7 @@ export default function Home() {
                       unoptimized
                       width={1024}
                       height={1024}
-                      src={sp.art}
+                      src={sp.catchSprite}
                       alt={caught ? sp.name : 'Uncaught silhouette'}
                     />
                   </div>
@@ -702,7 +709,7 @@ export default function Home() {
                               verticalAlign: 'middle',
                             }}
                           />{' '}
-                          {sp.core} Core
+                          {label(sp.core)} Core
                         </>
                       ) : (
                         'Lunara'
@@ -822,7 +829,7 @@ export default function Home() {
                   </DialogTitle>
                   <DialogDescription>
                     {known
-                      ? `${selected.rarity} · ${selected.core} Core · Home: Lunara`
+                      ? `${label(selected.rarityBase)} · ${label(selected.core)} Core · Home: Lunara`
                       : 'A creature waiting to be discovered on Lunara.'}
                   </DialogDescription>
                   <div className={r.caught ? '' : 'unseen'}>
@@ -831,7 +838,7 @@ export default function Home() {
                       width={1024}
                       height={1024}
                       className="detail-art"
-                      src={selected.art}
+                      src={selected.catchSprite}
                       alt={r.caught ? selected.name : 'Uncaught silhouette'}
                     />
                   </div>
@@ -859,9 +866,9 @@ export default function Home() {
                   {r.caught > 0 && (
                     <>
                       <p className="dialog-copy">
-                        Default Card · {selected.core} Core
+                        Base card · {label(selected.core)} Core
                         <br />
-                        Signature: {selected.signature}
+                        Signature: {selected.signatureName}
                         <br />
                         First contact:{' '}
                         {new Date(r.firstCaught!).toLocaleDateString()}

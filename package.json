@@ -12,7 +12,10 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "test": "node --experimental-strip-types --test lib/game.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "content:check": "node --experimental-strip-types scripts/content-check.ts",
+    "pretest": "npm run content:check",
+    "content:art": "node --experimental-strip-types scripts/content-art.ts"
   },
   "dependencies": {
     "react": "19.2.6",

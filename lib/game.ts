@@ -1,12 +1,25 @@
 import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
-import { CARDS_BY_ID, baseCardFor } from './cards.ts';
+import { CATALOGUE } from './catalogue.ts';
 export type RecordEntry = {
   caught: number;
   familiarity: number;
   speciesDust: number;
   xp: number;
   firstCaught: number | null;
-  cardIds: string[];
+};
+export type OwnedSource = 'catch' | 'pack' | 'craft' | 'intro';
+/**
+ * What the player holds, keyed by cardId. Art, rarity, name and number are
+ * NEVER stored here -- they resolve from the catalogue at read time, so
+ * re-arting a card or fixing a typo leaves existing saves working.
+ */
+export type OwnedCard = {
+  cardId: string;
+  /** Copies of this exact card. Dupes are the input to shards and crafting. */
+  count: number;
+  firstObtainedAt: number;
+  source: OwnedSource;
+  favorite: boolean;
 };
 export type Quality = 'Miss' | 'Good' | 'Perfect';
 export type Encounter = {
@@ -25,32 +38,49 @@ export type Encounter = {
   wasNew: boolean;
 };
 export type Save = {
-  version: 1;
+  version: 2;
   sparks: number;
   regeneratedAt: number;
   stardust: number;
   introStep: number;
   records: Record<string, RecordEntry>;
+  owned: Record<string, OwnedCard>;
   encounter: Encounter | null;
   slowTiming: boolean;
 };
-export const SAVE_KEY = 'starlets.phase1.v1';
+export const SAVE_KEY = 'starlets.phase2.v1';
+/** Phase 1 saves live here. Read once, migrated forward, never written again. */
+export const LEGACY_SAVE_KEY = 'starlets.phase1.v1';
 export const blankRecord = (): RecordEntry => ({
   caught: 0,
   familiarity: 0,
   speciesDust: 0,
   xp: 0,
   firstCaught: null,
-  cardIds: [],
 });
+export const grantCard = (
+  owned: Record<string, OwnedCard>,
+  cardId: string,
+  source: OwnedSource,
+  now: number,
+): Record<string, OwnedCard> => {
+  const held = owned[cardId];
+  return {
+    ...owned,
+    [cardId]: held
+      ? { ...held, count: held.count + 1 }
+      : { cardId, count: 1, firstObtainedAt: now, source, favorite: false },
+  };
+};
 export function newSave(now = Date.now()): Save {
   return {
-    version: 1,
+    version: 2,
     sparks: B.sparks.initial,
     regeneratedAt: now,
     stardust: 0,
     introStep: 0,
     records: Object.fromEntries(SPECIES.map((s) => [s.id, blankRecord()])),
+    owned: {},
     encounter: null,
     slowTiming: false,
   };
@@ -160,7 +190,8 @@ export function tether(save: Save, angle: number, now = Date.now()): Save {
   if (!done) return { ...save, encounter: next };
   const species = SPECIES.find((s) => s.id === e.speciesId)!;
   const old = save.records[species.id];
-  const record = { ...old, cardIds: [...old.cardIds] };
+  const record = { ...old };
+  let owned = save.owned;
   let stardust = save.stardust,
     sparks = save.sparks,
     introStep = save.introStep;
@@ -169,17 +200,18 @@ export function tether(save: Save, angle: number, now = Date.now()): Save {
     record.familiarity = 0;
     record.xp += old.caught ? B.xp.duplicate : B.xp.newCatch;
     record.firstCaught ??= now;
-    record.speciesDust += B.stardust[species.rarity];
-    const base = baseCardFor(species.id).id;
-    if (!record.cardIds.includes(base)) record.cardIds.push(base);
-    stardust += B.stardust[species.rarity];
+    record.speciesDust += B.stardust[species.rarityBase];
+    const base = CATALOGUE.baseFor(species.id);
+    if (base)
+      owned = grantCard(owned, base.cardId, e.intro ? 'intro' : 'catch', now);
+    stardust += B.stardust[species.rarityBase];
     if (e.intro) {
       sparks += B.sparks.introReward;
       introStep += 1;
     }
     next = {
       ...next,
-      reward: B.stardust[species.rarity],
+      reward: B.stardust[species.rarityBase],
       sparkReward: e.intro ? B.sparks.introReward : 0,
     };
   } else {
@@ -193,6 +225,7 @@ export function tether(save: Save, angle: number, now = Date.now()): Save {
     stardust,
     sparks,
     introStep,
+    owned,
     records: { ...save.records, [species.id]: record },
     encounter: next,
   };
@@ -208,12 +241,56 @@ const integer = (
   max = Number.MAX_SAFE_INTEGER,
 ): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max;
+type LegacyRecord = {
+  caught: number;
+  familiarity: number;
+  speciesDust: number;
+  xp: number;
+  firstCaught: number | null;
+  cardIds?: unknown;
+};
+/**
+ * Phase 1 -> Phase 2. Every cardIds[] entry becomes one owned copy sourced
+ * from a catch. Playtest saves are migrated, never discarded; anything the
+ * catalogue no longer knows about is a damaged save and still throws.
+ */
+export function migrateLegacySave(raw: string, now = Date.now()): Save {
+  const legacy = JSON.parse(raw) as Omit<Save, 'version' | 'owned'> & {
+    version: number;
+    records: Record<string, LegacyRecord>;
+  };
+  if (!legacy || legacy.version !== 1 || !legacy.records)
+    throw new Error('Unrecognized save');
+  let owned: Record<string, OwnedCard> = {};
+  const records: Record<string, RecordEntry> = {};
+  for (const species of SPECIES) {
+    const r = legacy.records[species.id];
+    records[species.id] = r
+      ? {
+          caught: r.caught,
+          familiarity: r.familiarity,
+          speciesDust: r.speciesDust,
+          xp: r.xp,
+          firstCaught: r.firstCaught,
+        }
+      : blankRecord();
+    const ids = Array.isArray(r?.cardIds) ? (r.cardIds as string[]) : [];
+    for (const legacyId of ids) {
+      // Phase 1 ids were '<species>-default'; the base card is their heir.
+      const base = CATALOGUE.baseFor(species.id);
+      if (!base || !legacyId.startsWith(species.id))
+        throw new Error('Damaged Starbook');
+      owned = grantCard(owned, base.cardId, 'catch', r?.firstCaught ?? now);
+    }
+  }
+  return parseSave(JSON.stringify({ ...legacy, version: 2, records, owned }));
+}
 /** Reject damaged/incompatible saves rather than silently overwriting progress. */
 export function parseSave(raw: string): Save {
   const s = JSON.parse(raw) as Save;
   if (
     !s ||
-    s.version !== 1 ||
+    s.version !== 2 ||
     !integer(s.sparks, 0) ||
     !integer(s.regeneratedAt, 0) ||
     !integer(s.stardust, 0) ||
@@ -230,13 +307,24 @@ export function parseSave(raw: string): Save {
       !integer(r.familiarity, 0, 100) ||
       !integer(r.speciesDust, 0) ||
       !integer(r.xp, 0) ||
-      !(r.firstCaught === null || integer(r.firstCaught, 0)) ||
-      !Array.isArray(r.cardIds) ||
-      r.cardIds.some(
-        (id) => CARDS_BY_ID.get(id)?.speciesId !== species.id,
-      )
+      !(r.firstCaught === null || integer(r.firstCaught, 0))
     )
       throw new Error('Damaged Starbook');
+  }
+  if (!s.owned || typeof s.owned !== 'object' || Array.isArray(s.owned))
+    throw new Error('Damaged collection');
+  for (const [cardId, o] of Object.entries(s.owned)) {
+    // An unknown cardId is a damaged save, not a card to quietly drop.
+    if (
+      !CATALOGUE.byId.has(cardId) ||
+      !o ||
+      o.cardId !== cardId ||
+      !integer(o.count, 1) ||
+      !integer(o.firstObtainedAt, 0) ||
+      !['catch', 'pack', 'craft', 'intro'].includes(o.source) ||
+      typeof o.favorite !== 'boolean'
+    )
+      throw new Error('Damaged collection');
   }
   const e = s.encounter;
   if (e !== null) {

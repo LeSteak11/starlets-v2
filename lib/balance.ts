@@ -21,26 +21,42 @@ export const BALANCE = {
     orbitMs: 2600,
     slowOrbitMs: 4500,
   },
+  /** Catch payout is a species/rarity value. It is never a per-card field. */
   stardust: {
-    Common: 20,
-    Uncommon: 30,
-    Rare: 40,
-    Legendary: 160,
-    Secret: 240,
+    common: 20,
+    uncommon: 30,
+    rare: 40,
+    legendary: 160,
+    secret: 240,
   },
   xp: { newCatch: 50, duplicate: 20, levelCap: 30 },
-  /** Set 01 shape. The set data in cards.ts is asserted against these. */
+  /**
+   * Set 01 design targets. `npm run content:check` reports drift from
+   * byRarity as a warning, not an error -- it is a target to balance
+   * against, not a tripwire that bricks the dev server.
+   */
   set01: {
+    setId: 'LUN-01',
     cards: 28,
     species: 8,
-    byRarity: { Common: 5, Uncommon: 6, Rare: 9, Legendary: 5, Secret: 3 },
+    byRarity: { common: 5, uncommon: 6, rare: 9, legendary: 5, secret: 3 },
+  },
+  /** Asset budgets. `npm run content:art` reports anything over. */
+  art: {
+    maxBytes: 250 * 1024,
+    card: { width: 1024, height: 1434 },
+    sprite: { width: 1024, height: 1024 },
   },
 } as const;
-/** Card rarity. Species carry the same scale, minus Secret: no species is Secret-only. */
+/** Card rarity. Species carry the same scale, minus secret: no species is secret-only. */
 export type Rarity = keyof typeof BALANCE.stardust;
-export type SpeciesRarity = Exclude<Rarity, 'Secret'>;
-export type Core = 'Grove' | 'Tide' | 'Flare';
+export type SpeciesRarity = Exclude<Rarity, 'secret'>;
+export type Core = 'grove' | 'tide' | 'flare';
 export type Zone = 'Moon Garden' | 'Crater Coast' | 'Prism Caves';
+export const RARITIES = Object.keys(BALANCE.stardust) as Rarity[];
+export const CORES: Core[] = ['grove', 'tide', 'flare'];
+/** Enums are lowercase in data and Title Case on screen. One place converts. */
+export const label = (value: string) => value[0].toUpperCase() + value.slice(1);
 /**
  * Set 01 roster: 8 Starlets, frozen. Species count does not rise until the
  * binder and the pack timer exist. Names and art here are placeholders pending
@@ -55,8 +71,8 @@ export const SPECIES = [
     id: 'mossbun',
     name: 'Mossbun',
     number: '001',
-    rarity: 'Common' as SpeciesRarity,
-    core: 'Grove' as Core,
+    rarityBase: 'common' as SpeciesRarity,
+    core: 'grove' as Core,
     zone: 'Moon Garden' as Zone,
     color: '#b9f77e',
     signalStyle: 'Steady drift',
@@ -64,15 +80,15 @@ export const SPECIES = [
     intro: true,
     encounterWeight: 26,
     lore: 'It listens through the moss on its ears. When the garden falls silent, it hears the stars.',
-    signature: 'Verdant Echo',
-    art: '/creatures/mossbun.webp',
+    signatureName: 'Verdant Echo',
+    catchSprite: '/creatures/mossbun.webp',
   },
   {
     id: 'emberpanda',
     name: 'Emberpanda',
     number: '002',
-    rarity: 'Common' as SpeciesRarity,
-    core: 'Flare' as Core,
+    rarityBase: 'common' as SpeciesRarity,
+    core: 'flare' as Core,
     zone: 'Prism Caves' as Zone,
     color: '#ffb67e',
     signalStyle: 'Solar pulse',
@@ -80,15 +96,15 @@ export const SPECIES = [
     intro: true,
     encounterWeight: 24,
     lore: 'A quiet keeper of borrowed sunlight. The embers in its coat stay warm through Lunara’s longest nights.',
-    signature: 'Sunburst',
-    art: '/creatures/placeholder.svg',
+    signatureName: 'Sunburst',
+    catchSprite: '/creatures/placeholder.svg',
   },
   {
     id: 'novafox',
     name: 'Novafox',
     number: '003',
-    rarity: 'Rare' as SpeciesRarity,
-    core: 'Tide' as Core,
+    rarityBase: 'rare' as SpeciesRarity,
+    core: 'tide' as Core,
     zone: 'Crater Coast' as Zone,
     color: '#8cdaff',
     signalStyle: 'Tidal surge',
@@ -96,15 +112,15 @@ export const SPECIES = [
     intro: true,
     encounterWeight: 9,
     lore: 'Its flowing tail traces tides that no ocean remembers. It appears where moonlight touches still water.',
-    signature: 'Comet Dash',
-    art: '/creatures/novafox.webp',
+    signatureName: 'Comet Dash',
+    catchSprite: '/creatures/novafox.webp',
   },
   {
     id: 'dewlark',
     name: 'Dewlark',
     number: '004',
-    rarity: 'Common' as SpeciesRarity,
-    core: 'Grove' as Core,
+    rarityBase: 'common' as SpeciesRarity,
+    core: 'grove' as Core,
     zone: 'Moon Garden' as Zone,
     color: '#a7e8bd',
     signalStyle: 'Scattered flutter',
@@ -112,15 +128,15 @@ export const SPECIES = [
     intro: false,
     encounterWeight: 26,
     lore: 'It drinks the dew that collects on fallen starlight, and sings only where nobody is listening.',
-    signature: 'Morning Chorus',
-    art: '/creatures/placeholder.svg',
+    signatureName: 'Morning Chorus',
+    catchSprite: '/creatures/placeholder.svg',
   },
   {
     id: 'shellune',
     name: 'Shellune',
     number: '005',
-    rarity: 'Uncommon' as SpeciesRarity,
-    core: 'Tide' as Core,
+    rarityBase: 'uncommon' as SpeciesRarity,
+    core: 'tide' as Core,
     zone: 'Crater Coast' as Zone,
     color: '#9fc7ff',
     signalStyle: 'Slow swell',
@@ -128,15 +144,15 @@ export const SPECIES = [
     intro: false,
     encounterWeight: 8,
     lore: 'Its shell keeps the shape of every tide it has outlived. Hold it to your ear and the crater answers.',
-    signature: 'Pearl Current',
-    art: '/creatures/placeholder.svg',
+    signatureName: 'Pearl Current',
+    catchSprite: '/creatures/placeholder.svg',
   },
   {
     id: 'cindermoth',
     name: 'Cindermoth',
     number: '006',
-    rarity: 'Uncommon' as SpeciesRarity,
-    core: 'Flare' as Core,
+    rarityBase: 'uncommon' as SpeciesRarity,
+    core: 'flare' as Core,
     zone: 'Prism Caves' as Zone,
     color: '#ffa8a0',
     signalStyle: 'Guttering flicker',
@@ -144,15 +160,15 @@ export const SPECIES = [
     intro: false,
     encounterWeight: 6,
     lore: 'Drawn to any light it did not make. Its wings leave warm ash on the cave walls it passes.',
-    signature: 'Ash Bloom',
-    art: '/creatures/placeholder.svg',
+    signatureName: 'Ash Bloom',
+    catchSprite: '/creatures/placeholder.svg',
   },
   {
     id: 'glimmerelk',
     name: 'Glimmerelk',
     number: '007',
-    rarity: 'Rare' as SpeciesRarity,
-    core: 'Grove' as Core,
+    rarityBase: 'rare' as SpeciesRarity,
+    core: 'grove' as Core,
     zone: 'Moon Garden' as Zone,
     color: '#d9c6ff',
     signalStyle: 'Long resonance',
@@ -160,15 +176,15 @@ export const SPECIES = [
     intro: false,
     encounterWeight: 1,
     lore: 'Its antlers hold light the way a riverbed holds water. Whole seasons pass between sightings.',
-    signature: 'Antler Dawn',
-    art: '/creatures/placeholder.svg',
+    signatureName: 'Antler Dawn',
+    catchSprite: '/creatures/placeholder.svg',
   },
   {
     id: 'selenith',
     name: 'Selenith',
     number: '008',
-    rarity: 'Legendary' as SpeciesRarity,
-    core: 'Tide' as Core,
+    rarityBase: 'legendary' as SpeciesRarity,
+    core: 'tide' as Core,
     zone: 'Crater Coast' as Zone,
     color: '#f2e9ff',
     signalStyle: 'Unbroken tone',
@@ -176,8 +192,8 @@ export const SPECIES = [
     intro: false,
     encounterWeight: 0.2,
     lore: 'The moon that Lunara was named for walks its own coast. Nobody agrees on what it looks like up close.',
-    signature: 'Crown of Lunara',
-    art: '/creatures/placeholder.svg',
+    signatureName: 'Crown of Lunara',
+    catchSprite: '/creatures/placeholder.svg',
   },
 ] as const;
 /** The tutorial is three catches. It does not grow with the roster. */

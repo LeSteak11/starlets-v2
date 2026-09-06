@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
-import { BINDER_PAGES, SET_01, baseCardFor, cardNumber } from './cards.ts';
+import { binderPages, cardCounter } from './cards.ts';
+import { CATALOGUE } from './catalogue.ts';
+import { SET_01 } from '../content/set-01.ts';
 import {
   newSave,
   scan,
@@ -12,6 +14,8 @@ import {
   parseSave,
   qualityAt,
   weightedSpecies,
+  migrateLegacySave,
+  grantCard,
 } from './game.ts';
 import type { Save } from './game.ts';
 const rng = () => 0.5;
@@ -35,7 +39,9 @@ void test('intro is free, guarantees all three catches, and grants bounded rewar
     assert.equal(s.sparks, 7 + i);
     const settled = s;
     assert.deepEqual(tether(s, 0), settled);
-    assert.equal(s.records[SPECIES[i].id].cardIds.length, 1);
+    const base = CATALOGUE.baseFor(SPECIES[i].id)!.cardId;
+    assert.equal(s.owned[base].count, 1);
+    assert.equal(s.owned[base].source, 'intro');
     s = dismissResult(s);
   }
   assert.equal(s.stardust, 80);
@@ -75,7 +81,9 @@ void test('accurate timing catches normally; duplicates preserve history and Car
   s = finish(beginEncounter(scan(dismissResult(s), rng, 1000), 1000), true);
   assert.equal(s.records.novafox.caught, 2);
   assert.equal(s.records.novafox.xp, 70);
-  assert.equal(s.records.novafox.cardIds.length, 1);
+  // Two catches, one Starbook slot, two copies held.
+  assert.equal(Object.keys(s.owned).length, 1);
+  assert.equal(s.owned[CATALOGUE.baseFor('novafox')!.cardId].count, 2);
   assert.equal(s.records.novafox.firstCaught, 1000);
   assert.equal(s.stardust, 80);
 });
@@ -112,13 +120,15 @@ void test('invalid saves are rejected without replacing data', () => {
     '{',
     'null',
     '{}',
-    JSON.stringify({ ...newSave(), version: 2 }),
+    JSON.stringify({ ...newSave(), version: 3 }),
+    JSON.stringify({ ...newSave(), version: 1 }),
+    JSON.stringify({ ...newSave(), owned: [] }),
     JSON.stringify({ ...newSave(), sparks: -1 }),
     JSON.stringify({ ...newSave(), encounter: {} }),
   ])
     assert.throws(() => parseSave(raw));
 });
-void test('Set 01 holds its locked shape: 8 Starlets, 28 cards, one base each', () => {
+void test('Set 01 holds its shape: 8 Starlets, 28 cards, one base each', () => {
   assert.equal(SPECIES.length, B.set01.species);
   assert.equal(SET_01.length, B.set01.cards);
   assert.equal(INTRO_SPECIES.length, 3);
@@ -127,36 +137,44 @@ void test('Set 01 holds its locked shape: 8 Starlets, 28 cards, one base each', 
   const counted: Record<string, number> = {};
   for (const c of SET_01) counted[c.rarity] = (counted[c.rarity] ?? 0) + 1;
   assert.deepEqual(counted, { ...B.set01.byRarity });
+  assert.equal(new Set(SET_01.map((c) => c.cardId)).size, SET_01.length);
+  SET_01.forEach((c, i) => {
+    assert.equal(c.number, i + 1);
+    assert.equal(c.numberMax, SET_01.length);
+  });
   for (const species of SPECIES) {
-    const line = SET_01.filter((c) => c.speciesId === species.id);
+    const line = CATALOGUE.lineFor(species.id);
     assert.ok(line.length >= 3, species.id);
-    assert.equal(line.filter((c) => c.kind === 'base').length, 1, species.id);
-    assert.equal(baseCardFor(species.id).speciesId, species.id);
+    assert.equal(line.filter((c) => c.isBase).length, 1, species.id);
+    assert.equal(CATALOGUE.baseFor(species.id)!.speciesId, species.id);
   }
   // Secrets are printings of somebody already in the book, never new species.
-  for (const secret of SET_01.filter((c) => c.rarity === 'Secret'))
+  for (const secret of SET_01.filter((c) => c.rarity === 'secret'))
     assert.ok(SPECIES.some((s) => s.id === secret.speciesId));
-  assert.equal(cardNumber(SET_01[0]), 'LUN/01');
-  assert.equal(cardNumber(SET_01[27]), 'LUN/28');
+  assert.equal(cardCounter(SET_01[0]), '001/28');
   assert.equal(
-    BINDER_PAGES.reduce((n, page) => n + page.cards.length, 0),
+    binderPages(SET_01).reduce((n, page) => n + page.cards.length, 0),
     SET_01.length,
   );
 });
-void test('alts may outrank their base, and only 001/002/004 start Common', () => {
-  const commonBases = SET_01.filter(
-    (c) => c.kind === 'base' && c.rarity === 'Common',
-  ).map((c) => c.speciesId);
-  assert.deepEqual(commonBases, ['mossbun', 'emberpanda', 'dewlark']);
-  const emberpanda = SET_01.filter((c) => c.speciesId === 'emberpanda');
-  assert.equal(emberpanda.find((c) => c.kind === 'base')!.rarity, 'Common');
-  assert.ok(emberpanda.some((c) => c.rarity === 'Secret'));
-  // The set boss has no Common and no Uncommon printing.
+void test('alts may outrank their base, and only 001/002/004 start common', () => {
+  assert.deepEqual(
+    SET_01.filter((c) => c.isBase && c.rarity === 'common').map(
+      (c) => c.speciesId,
+    ),
+    ['mossbun', 'emberpanda', 'dewlark'],
+  );
+  const emberpanda = CATALOGUE.lineFor('emberpanda');
+  assert.equal(emberpanda.find((c) => c.isBase)!.rarity, 'common');
+  assert.ok(emberpanda.some((c) => c.rarity === 'secret'));
+  // The set boss has no common and no uncommon printing.
   assert.ok(
-    !SET_01.filter((c) => c.speciesId === 'selenith').some((c) =>
-      ['Common', 'Uncommon'].includes(c.rarity),
+    !CATALOGUE.lineFor('selenith').some((c) =>
+      ['common', 'uncommon'].includes(c.rarity),
     ),
   );
+  // role and finish stay independent axes: a pose card may be printed foil.
+  assert.ok(SET_01.every((c) => c.role !== 'base' || c.isBase));
 });
 void test('scan weights rarity: the mascot is not a routine encounter', () => {
   assert.equal(weightedSpecies(0).id, 'mossbun');
@@ -169,4 +187,104 @@ void test('scan weights rarity: the mascot is not a routine encounter', () => {
   assert.ok(counts.get('selenith')! < counts.get('glimmerelk')!);
   assert.ok(counts.get('glimmerelk')! < counts.get('mossbun')!);
   assert.equal(counts.size, SPECIES.length);
+});
+void test('catching grants exactly one base card, and dupes raise the count', () => {
+  let save = newSave(0);
+  const base = CATALOGUE.baseFor('mossbun')!.cardId;
+  save = grantCard(save.owned, base, 'catch', 5) && {
+    ...save,
+    owned: grantCard(save.owned, base, 'catch', 5),
+  };
+  assert.equal(save.owned[base].count, 1);
+  assert.equal(save.owned[base].firstObtainedAt, 5);
+  save = { ...save, owned: grantCard(save.owned, base, 'pack', 9) };
+  assert.equal(save.owned[base].count, 2);
+  // A dupe never rewrites when the card was first obtained, or its source.
+  assert.equal(save.owned[base].firstObtainedAt, 5);
+  assert.equal(save.owned[base].source, 'catch');
+});
+void test('Phase 1 saves migrate forward instead of being discarded', () => {
+  const legacy = {
+    version: 1,
+    sparks: 4,
+    regeneratedAt: 100,
+    stardust: 60,
+    introStep: 2,
+    slowTiming: true,
+    encounter: null,
+    records: {
+      mossbun: {
+        caught: 3,
+        familiarity: 0,
+        speciesDust: 60,
+        xp: 90,
+        firstCaught: 42,
+        cardIds: ['mossbun-default'],
+      },
+      novafox: {
+        caught: 0,
+        familiarity: 25,
+        speciesDust: 0,
+        xp: 0,
+        firstCaught: null,
+        cardIds: [],
+      },
+    },
+  };
+  const save = migrateLegacySave(JSON.stringify(legacy), 999);
+  assert.equal(save.version, 2);
+  assert.equal(save.stardust, 60);
+  assert.equal(save.sparks, 4);
+  assert.equal(save.records.mossbun.caught, 3);
+  // Species added after the save was written start blank, not missing.
+  assert.equal(save.records.selenith.caught, 0);
+  const base = CATALOGUE.baseFor('mossbun')!.cardId;
+  assert.equal(save.owned[base].count, 1);
+  assert.equal(save.owned[base].firstObtainedAt, 42);
+  assert.equal(save.owned[base].source, 'catch');
+  assert.equal(Object.keys(save.owned).length, 1);
+  assert.throws(() => migrateLegacySave(JSON.stringify({ version: 2 })));
+});
+void test('an owned card the catalogue does not know is a damaged save', () => {
+  const save = newSave(0);
+  for (const owned of [
+    {
+      'LUN-01-999': {
+        cardId: 'LUN-01-999',
+        count: 1,
+        firstObtainedAt: 0,
+        source: 'catch',
+        favorite: false,
+      },
+    },
+    {
+      'LUN-01-001': {
+        cardId: 'LUN-01-002',
+        count: 1,
+        firstObtainedAt: 0,
+        source: 'catch',
+        favorite: false,
+      },
+    },
+    {
+      'LUN-01-001': {
+        cardId: 'LUN-01-001',
+        count: 0,
+        firstObtainedAt: 0,
+        source: 'catch',
+        favorite: false,
+      },
+    },
+    {
+      'LUN-01-001': {
+        cardId: 'LUN-01-001',
+        count: 1,
+        firstObtainedAt: 0,
+        source: 'gift',
+        favorite: false,
+      },
+    },
+  ])
+    assert.throws(() => parseSave(JSON.stringify({ ...save, owned })));
+  assert.doesNotThrow(() => parseSave(JSON.stringify(save)));
 });
