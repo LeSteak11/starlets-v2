@@ -18,7 +18,15 @@ import {
   grantCard,
   accruePacks,
   openPack,
+  applyGrant,
 } from './game.ts';
+import {
+  claimExpedition,
+  dispatchExpedition,
+  expeditionResult,
+  setExpeditionTeam,
+} from './expeditions.ts';
+import { CARD_TRAITS } from '../content/expeditions.ts';
 import { printingFor, qualityBand, rollPack, snapToLine } from './flip.ts';
 import type { Save } from './game.ts';
 const rng = () => 0.5;
@@ -146,7 +154,7 @@ void test('invalid saves are rejected without replacing data', () => {
     '{',
     'null',
     '{}',
-    JSON.stringify({ ...newSave(), version: 4 }),
+    JSON.stringify({ ...newSave(), version: 5 }),
     JSON.stringify({ ...newSave(), version: 2 }),
     JSON.stringify({ ...newSave(), owned: [] }),
     JSON.stringify({ ...newSave(), packs: null }),
@@ -382,7 +390,7 @@ void test('Phase 1 saves migrate forward instead of being discarded', () => {
     },
   };
   const save = migrateLegacySave(JSON.stringify(legacy), 999);
-  assert.equal(save.version, 3);
+  assert.equal(save.version, 4);
   assert.equal(save.stardust, 60);
   assert.equal(save.sparks, 4);
   assert.equal(save.records.mossbun.caught, 3);
@@ -442,4 +450,63 @@ void test('an owned card the catalogue does not know is a damaged save', () => {
   ])
     assert.throws(() => parseSave(JSON.stringify({ ...save, owned })));
   assert.doesNotThrow(() => parseSave(JSON.stringify(save)));
+});
+void test('every card has one Expedition trait from the six-word vocabulary', () => {
+  assert.deepEqual(
+    Object.keys(CARD_TRAITS).sort(),
+    CATALOGUE.all.map((card) => card.cardId).sort(),
+  );
+  assert.equal(new Set(Object.values(CARD_TRAITS)).size, 6);
+});
+void test('v3 saves migrate without losing collection or resources', () => {
+  const old = applyGrant(newSave(100), null, 'LUN-01-001', false, 100);
+  const raw = JSON.stringify({
+    ...old,
+    version: 3,
+    equipped: undefined,
+    expedition: undefined,
+    expeditionsCompleted: undefined,
+  });
+  const migrated = parseSave(raw);
+  assert.equal(migrated.version, 4);
+  assert.equal(migrated.stardust, old.stardust);
+  assert.deepEqual(migrated.owned, old.owned);
+  assert.equal(migrated.equipped.mossbun, 'LUN-01-001');
+});
+void test('Expeditions validate ownership, improve by trait, persist, and claim once', () => {
+  let save = newSave(0);
+  for (const cardId of [
+    'LUN-01-001',
+    'LUN-01-002',
+    'LUN-01-019',
+    'LUN-01-022',
+    'LUN-01-010',
+    'LUN-01-012',
+  ])
+    save = applyGrant(save, null, cardId, false, 1);
+  const baseTeam = [
+    { speciesId: 'mossbun', cardId: 'LUN-01-001' },
+    { speciesId: 'emberpanda', cardId: 'LUN-01-019' },
+    { speciesId: 'novafox', cardId: 'LUN-01-010' },
+  ];
+  save = setExpeditionTeam(save, baseTeam);
+  const base = expeditionResult(save.expedition);
+  save = setExpeditionTeam(save, [
+    { speciesId: 'mossbun', cardId: 'LUN-01-002' },
+    { speciesId: 'emberpanda', cardId: 'LUN-01-022' },
+    { speciesId: 'novafox', cardId: 'LUN-01-012' },
+  ]);
+  const improved = expeditionResult(save.expedition);
+  assert.ok(improved.reward > base.reward);
+  assert.equal(improved.tier, 'Perfect Match');
+  const dispatched = dispatchExpedition(save, 1000);
+  assert.deepEqual(parseSave(JSON.stringify(dispatched)), dispatched);
+  assert.equal(claimExpedition(dispatched, 10999), dispatched);
+  const claimed = claimExpedition(dispatched, 11000);
+  assert.equal(claimed.stardust, dispatched.stardust + improved.reward);
+  assert.equal(claimExpedition(claimed, 11000), claimed);
+  const invalid = setExpeditionTeam(claimed, [
+    { speciesId: 'mossbun', cardId: 'LUN-01-S1' },
+  ]);
+  assert.equal(invalid, claimed);
 });

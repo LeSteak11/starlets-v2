@@ -85,6 +85,11 @@ export const BALANCE = {
   },
   /** Duplicates mint shards. Craft costs land with the craft UI. */
   shards: { common: 1, uncommon: 2, rare: 3, legendary: 8, secret: 25 },
+  expeditions: {
+    firstDurationMs: 10 * 1000,
+    repeatDurationMs: 5 * 60 * 1000,
+    rewards: { Ready: 30, 'Strong Match': 50, 'Perfect Match': 80 },
+  },
   /** Asset budgets. `npm run content:art` reports anything over. */
   art: {
     maxBytes: 250 * 1024,

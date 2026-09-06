@@ -359,6 +359,20 @@ small {
   color: #d1dbea;
   margin: 18px 0;
 }
+.save-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.save-recovery button {
+  flex: 0 0 auto;
+  border: 1px solid #b9f77e;
+  border-radius: 9px;
+  background: #b9f77e;
+  color: #142014;
+  padding: 9px 12px;
+}
 .collection-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -621,8 +635,13 @@ small {
   }
   .bottom-nav button {
     flex: 1;
+    min-width: 0;
+    flex-direction: column;
     justify-content: center;
-    padding: 12px;
+    padding: 7px 2px;
+    gap: 2px;
+    font-size: 10px;
+    white-space: nowrap;
   }
   .coordinates {
     font-size: 10px;
@@ -633,6 +652,319 @@ small {
   .art-orbit {
     height: 280px;
     width: 280px;
+  }
+}
+
+/* --- Expeditions: one assignment, a live trait readout, and a saved timer --- */
+.expedition-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.82fr) minmax(420px, 1.18fr);
+  gap: 22px;
+  align-items: start;
+}
+.mission-card,
+.team-builder,
+.expedition-active {
+  border: 1px solid #2d3b51;
+  border-radius: 24px;
+  background: #111927;
+}
+.mission-card {
+  position: sticky;
+  top: 18px;
+  overflow: hidden;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 90% 0%, #7c5bc72b, transparent 38%),
+    linear-gradient(145deg, #172334, #101723 70%);
+}
+.mission-card:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: radial-gradient(#c9dcff 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+.mission-card > * {
+  position: relative;
+}
+.mission-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c9b5ff;
+  font:
+    700 12px/1 var(--font-geist-mono),
+    monospace;
+  letter-spacing: 0.14em;
+  margin-bottom: 22px;
+}
+.trait-request {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0;
+}
+.trait-request span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #46536a;
+  border-radius: 999px;
+  color: #aab6c9;
+  font-size: 13px;
+}
+.trait-request span.matched {
+  border-color: #7cab5b;
+  background: #b9f77e14;
+  color: #d9ffc0;
+}
+.mission-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 22px 0;
+  border-block: 1px solid #2b384c;
+}
+.mission-facts div {
+  padding: 16px 8px 16px 0;
+}
+.mission-facts dt {
+  color: #8795ab;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.mission-facts dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.card-advice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #8f75d366;
+  background: #8f75d314;
+  color: #dcd2fa;
+  border-radius: 13px;
+  padding: 13px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.card-advice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.expedition-dispatch {
+  width: 100%;
+  min-height: 52px;
+}
+.team-builder {
+  padding: 24px;
+}
+.team-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.team-heading h2,
+.team-heading p {
+  margin-bottom: 0;
+}
+.team-heading > span {
+  border: 1px solid #35445b;
+  border-radius: 999px;
+  padding: 8px 11px;
+  color: #cbd5e5;
+  font:
+    600 13px/1 var(--font-geist-mono),
+    monospace;
+}
+.starlet-roster {
+  display: grid;
+  gap: 10px;
+}
+.team-starlet {
+  border: 1px solid #2b384d;
+  border-radius: 16px;
+  background: #0d1420;
+  overflow: hidden;
+}
+.team-starlet.selected {
+  border-color: #6b8b50;
+}
+.starlet-select {
+  width: 100%;
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: #edf3ff;
+  text-align: left;
+  padding: 10px 14px;
+}
+.starlet-select > span:nth-child(2) {
+  flex: 1;
+}
+.starlet-select small {
+  display: block;
+  margin-top: 3px;
+}
+.starlet-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--starlet-color) 22%, #172235);
+  color: var(--starlet-color);
+  border: 1px solid color-mix(in srgb, var(--starlet-color) 45%, transparent);
+  font-weight: 800;
+}
+.select-mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #202c3d;
+  color: #c9f7a4;
+}
+.card-choices {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 12px 12px 66px;
+}
+.card-choices button {
+  flex: 0 0 auto;
+  min-width: 120px;
+  min-height: 52px;
+  border: 1px solid #334158;
+  border-radius: 11px;
+  background: #151f2e;
+  color: #d8e1ee;
+  text-align: left;
+  padding: 8px 10px;
+}
+.card-choices button.active {
+  border-color: #b9f77e;
+  background: #b9f77e12;
+}
+.card-choices span,
+.card-choices b {
+  display: block;
+}
+.card-choices span {
+  font-size: 12px;
+  color: #9ca9bc;
+}
+.card-choices b {
+  font-size: 13px;
+  margin-top: 3px;
+}
+.empty-team {
+  text-align: center;
+  padding: 50px 20px;
+}
+.expedition-active {
+  max-width: 680px;
+  margin: 20px auto;
+  padding: 48px 28px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, #744dab2b, transparent 48%), #111927;
+}
+.expedition-beacon {
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 24px;
+  border: 1px solid #8066aa;
+  border-radius: 50%;
+  color: #cfb8ff;
+  box-shadow: 0 0 50px #936fd33d;
+  animation: expedition-pulse 2.2s ease-in-out infinite;
+}
+.expedition-beacon.complete {
+  color: #c9ff9f;
+  border-color: #8dbb69;
+  animation: none;
+}
+.expedition-away-team {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0;
+}
+.expedition-away-team span,
+.return-time {
+  border: 1px solid #344158;
+  background: #151f2e;
+  border-radius: 999px;
+  padding: 9px 12px;
+  color: #b8c3d4;
+  font-size: 13px;
+}
+.expedition-away-team b {
+  color: #e4f6d6;
+  margin-left: 5px;
+}
+.return-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.expedition-claim {
+  min-width: 250px;
+}
+@keyframes expedition-pulse {
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 70px #936fd35c;
+  }
+}
+
+@media (max-width: 850px) {
+  .expedition-layout {
+    grid-template-columns: 1fr;
+  }
+  .mission-card {
+    position: static;
+  }
+}
+@media (max-width: 560px) {
+  .expedition-layout {
+    gap: 14px;
+  }
+  .mission-card,
+  .team-builder {
+    padding: 20px;
+    border-radius: 18px;
+  }
+  .mission-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mission-facts div:last-child {
+    grid-column: 1 / -1;
+    padding-top: 0;
+  }
+  .card-choices {
+    padding-left: 12px;
+  }
+  .save-recovery {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 .reward-line {
@@ -885,7 +1217,9 @@ small {
 /* Never hidden on small screens: "two slots left on page 2" is the motivator. */
 .page-count {
   display: inline-block;
-  font: 600 12px/1 ui-monospace, monospace;
+  font:
+    600 12px/1 ui-monospace,
+    monospace;
   letter-spacing: 0.06em;
   color: #a5b1c5;
 }

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
+  Compass,
   PackageOpen,
   Radar,
   Settings2,
@@ -13,6 +14,7 @@ import { BinderScreen } from '@/components/game/binder-screen';
 import { GameDialogs } from '@/components/game/dialogs';
 import { PacksScreen } from '@/components/game/packs-screen';
 import { ScanScreen } from '@/components/game/scan-screen';
+import { ExpeditionScreen } from '@/components/game/expedition-screen';
 import { useSave } from '@/app/_hooks/use-save';
 import { BALANCE as B, INTRO_SPECIES, SPECIES, label } from '@/lib/balance';
 import { CATALOGUE } from '@/lib/catalogue';
@@ -21,7 +23,9 @@ import { accruePacks, regenerate, scan } from '@/lib/game';
 const SET_COUNT = SPECIES.length;
 export default function Home() {
   const { save, current, error, now, update, restart } = useSave();
-  const [tab, setTab] = useState<'scan' | 'book' | 'packs'>('scan');
+  const [tab, setTab] = useState<'scan' | 'book' | 'packs' | 'expedition'>(
+    'scan',
+  );
   const [settings, setSettings] = useState(false);
   const [reset, setReset] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
@@ -126,7 +130,7 @@ export default function Home() {
     <main className="shell">
       <header className="topbar">
         <Link className="brand" href="/" aria-label="Starlets home">
-          ✦ STARLETS<span>FIELD OBSERVATORY</span>
+          ✦ STARLETS<span>HOME</span>
         </Link>
         <div className="resources">
           <span
@@ -154,9 +158,12 @@ export default function Home() {
         </div>
       </header>
       {error && (
-        <p className="message" role="alert">
-          {error}
-        </p>
+        <div className="message save-recovery" role="alert">
+          <span>{error}</span>
+          {!save && (
+            <button onClick={freshStart}>Start a recovered save</button>
+          )}
+        </div>
       )}
       <section className="page-heading">
         <div>
@@ -164,31 +171,37 @@ export default function Home() {
             LUNARA /{' '}
             {tab === 'packs'
               ? 'SUPPLY DROP'
-              : tab === 'book'
-                ? 'FIELD ARCHIVE'
-                : species && e?.stage !== 'signal'
-                  ? species.zone.toUpperCase()
-                  : 'DEEP SPACE SCANNER'}
+              : tab === 'expedition'
+                ? 'HOME / EXPEDITIONS'
+                : tab === 'book'
+                  ? 'FIELD ARCHIVE'
+                  : species && e?.stage !== 'signal'
+                    ? species.zone.toUpperCase()
+                    : 'DEEP SPACE SCANNER'}
           </p>
           <h1>
             {tab === 'packs'
               ? 'Open the next signal.'
-              : tab === 'book'
-                ? 'Your discoveries.'
-                : e?.stage === 'lock'
-                  ? 'Establish a connection.'
-                  : e?.stage === 'result'
-                    ? e.newSlot
-                      ? 'A signal. A connection.'
-                      : 'Another printing.'
-                    : 'Follow the signal.'}
+              : tab === 'expedition'
+                ? 'Prepare the right team.'
+                : tab === 'book'
+                  ? 'Your discoveries.'
+                  : e?.stage === 'lock'
+                    ? 'Establish a connection.'
+                    : e?.stage === 'result'
+                      ? e.newSlot
+                        ? 'A signal. A connection.'
+                        : 'Another printing.'
+                      : 'Follow the signal.'}
           </h1>
           <p>
             {tab === 'packs'
               ? 'Five printings. One card at a time.'
-              : tab === 'book'
-                ? 'Every encounter leaves a trace.'
-                : 'Something out there is waiting to be discovered.'}
+              : tab === 'expedition'
+                ? 'A different card can change what a Starlet brings.'
+                : tab === 'book'
+                  ? 'Every encounter leaves a trace.'
+                  : 'Something out there is waiting to be discovered.'}
           </p>
         </div>
         <span className="status">
@@ -197,11 +210,17 @@ export default function Home() {
             ? state && state.packs.stored > 0
               ? `${state.packs.stored} pack${state.packs.stored === 1 ? '' : 's'} ready`
               : 'Supply timer active'
-            : tab === 'book'
-              ? `${discovered} / ${SET_COUNT} discovered`
-              : e?.stage === 'lock'
-                ? 'Signal Lock active'
-                : 'Scanner online'}
+            : tab === 'expedition'
+              ? state?.expedition.startedAt
+                ? now >= state.expedition.completesAt!
+                  ? 'Reward ready'
+                  : 'Team away'
+                : 'Assignment ready'
+              : tab === 'book'
+                ? `${discovered} / ${SET_COUNT} discovered`
+                : e?.stage === 'lock'
+                  ? 'Signal Lock active'
+                  : 'Scanner online'}
         </span>
       </section>
       {tab === 'scan' ? (
@@ -220,6 +239,8 @@ export default function Home() {
         />
       ) : tab === 'packs' ? (
         <PacksScreen state={state} now={now} update={update} />
+      ) : tab === 'expedition' && state ? (
+        <ExpeditionScreen state={state} now={now} update={update} />
       ) : (
         <BinderScreen
           state={state}
@@ -236,6 +257,17 @@ export default function Home() {
         >
           <Radar />
           Scan{e?.stage === 'lock' && ' · Active'}
+        </button>
+        <button
+          className={tab === 'expedition' ? 'active' : ''}
+          aria-current={tab === 'expedition' ? 'page' : undefined}
+          onClick={() => setTab('expedition')}
+        >
+          <Compass />
+          Expeditions
+          {state?.expedition.startedAt && now >= state.expedition.completesAt!
+            ? ' · Ready'
+            : ''}
         </button>
         <button
           className={tab === 'book' ? 'active' : ''}

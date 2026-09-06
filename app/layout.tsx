@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Starlets · Lunara Observatory',
-  description: 'Trace signals, discover creatures, and build your Starbook.',
+  title: 'Starlets · Home',
+  description:
+    'Discover Starlets, collect their cards, and send teams on Expeditions.',
 };
 
 export default function RootLayout({

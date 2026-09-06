@@ -1,6 +1,7 @@
 import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
 import { CATALOGUE } from './catalogue.ts';
 import { qualityBand, printingFor, rollPack } from './flip.ts';
+import { emptyExpedition, type ExpeditionState } from './expeditions.ts';
 export type RecordEntry = {
   /** Flips that landed on this species. Not a gate -- a tally. */
   caught: number;
@@ -53,7 +54,7 @@ export type PackState = {
   opened: number;
 };
 export type Save = {
-  version: 3;
+  version: 4;
   sparks: number;
   regeneratedAt: number;
   stardust: number;
@@ -65,6 +66,11 @@ export type Save = {
   shards: number;
   encounter: Encounter | null;
   slowTiming: boolean;
+  /** One equipped owned printing per discovered persistent Starlet. */
+  equipped: Record<string, string>;
+  /** Draft, active timer, and unclaimed reward share one persisted state. */
+  expedition: ExpeditionState;
+  expeditionsCompleted: number;
 };
 export const SAVE_KEY = 'starlets.phase2.v1';
 /** Phase 1 saves live here. Read once, migrated forward, never written again. */
@@ -91,7 +97,7 @@ export const grantCard = (
 };
 export function newSave(now = Date.now()): Save {
   return {
-    version: 3,
+    version: 4,
     sparks: B.sparks.initial,
     regeneratedAt: now,
     stardust: 0,
@@ -102,6 +108,9 @@ export function newSave(now = Date.now()): Save {
     shards: 0,
     encounter: null,
     slowTiming: false,
+    equipped: {},
+    expedition: emptyExpedition(),
+    expeditionsCompleted: 0,
   };
 }
 export function regenerate(save: Save, now = Date.now()): Save {
@@ -272,6 +281,9 @@ export function applyGrant(
     sparks: save.sparks + (intro ? B.sparks.introReward : 0),
     introStep: save.introStep + (intro ? 1 : 0),
     owned,
+    equipped: newSlot
+      ? { ...save.equipped, [card.speciesId]: cardId }
+      : save.equipped,
     packs: { ...save.packs, pity },
     records: { ...save.records, [card.speciesId]: record },
     encounter: encounter
@@ -423,25 +435,58 @@ export function migrateLegacySave(raw: string, now = Date.now()): Save {
       owned = grantCard(owned, base.cardId, 'catch', r?.firstCaught ?? now);
     }
   }
+  const migratedOwned = legacy.version === 2 ? (legacy.owned ?? {}) : owned;
   return parseSave(
     JSON.stringify({
       ...legacy,
-      version: 3,
+      version: 4,
       records,
       // v2 already tracked ownership; v1 built it from cardIds above.
-      owned: legacy.version === 2 ? (legacy.owned ?? {}) : owned,
+      owned: migratedOwned,
       packs: legacy.packs ?? { stored: 0, accruedAt: now, pity: 0, opened: 0 },
       shards: legacy.shards ?? 0,
       encounter: null,
+      equipped: Object.fromEntries(
+        SPECIES.flatMap((species) => {
+          const first = CATALOGUE.lineFor(species.id).find(
+            (card) => migratedOwned[card.cardId],
+          );
+          return first ? [[species.id, first.cardId]] : [];
+        }),
+      ),
+      expedition: emptyExpedition(),
+      expeditionsCompleted: 0,
     }),
   );
 }
 /** Reject damaged/incompatible saves rather than silently overwriting progress. */
 export function parseSave(raw: string): Save {
-  const s = JSON.parse(raw) as Save;
+  const parsed = JSON.parse(raw) as Omit<Partial<Save>, 'version'> & {
+    version?: number;
+  };
+  // Phase 2 v3 saves are upgraded in place. Collection and economy fields are
+  // copied unchanged; Expedition fields only add new state.
+  const s = (
+    parsed?.version === 3
+      ? {
+          ...parsed,
+          version: 4,
+          equipped: Object.fromEntries(
+            SPECIES.flatMap((species) => {
+              const first = CATALOGUE.lineFor(species.id).find(
+                (card) => parsed.owned?.[card.cardId],
+              );
+              return first ? [[species.id, first.cardId]] : [];
+            }),
+          ),
+          expedition: emptyExpedition(),
+          expeditionsCompleted: 0,
+        }
+      : parsed
+  ) as Save;
   if (
     !s ||
-    s.version !== 3 ||
+    s.version !== 4 ||
     !integer(s.sparks, 0) ||
     !integer(s.regeneratedAt, 0) ||
     !integer(s.stardust, 0) ||
@@ -486,6 +531,55 @@ export function parseSave(raw: string): Save {
     )
       throw new Error('Damaged collection');
   }
+  if (
+    !s.equipped ||
+    typeof s.equipped !== 'object' ||
+    Array.isArray(s.equipped) ||
+    !integer(s.expeditionsCompleted, 0)
+  )
+    throw new Error('Damaged Expedition state');
+  for (const [speciesId, cardId] of Object.entries(s.equipped)) {
+    const card = CATALOGUE.get(cardId);
+    if (!card || card.speciesId !== speciesId || !s.owned[cardId])
+      throw new Error('Damaged equipped card');
+  }
+  const x = s.expedition;
+  if (
+    !x ||
+    !integer(x.assignmentIndex, 0) ||
+    !Array.isArray(x.team) ||
+    x.team.length > 3 ||
+    !(x.startedAt === null || integer(x.startedAt, 0)) ||
+    !(x.completesAt === null || integer(x.completesAt, 0)) ||
+    !(x.reward === null || integer(x.reward, 0)) ||
+    !(
+      x.tier === null ||
+      ['Ready', 'Strong Match', 'Perfect Match'].includes(x.tier)
+    )
+  )
+    throw new Error('Damaged Expedition state');
+  const expeditionSpecies = new Set<string>();
+  for (const member of x.team) {
+    const card = CATALOGUE.get(member?.cardId);
+    if (
+      !member ||
+      typeof member.speciesId !== 'string' ||
+      expeditionSpecies.has(member.speciesId) ||
+      !card ||
+      card.speciesId !== member.speciesId ||
+      !s.owned[member.cardId] ||
+      s.records[member.speciesId]?.caught < 1
+    )
+      throw new Error('Damaged Expedition team');
+    expeditionSpecies.add(member.speciesId);
+  }
+  if (
+    (x.startedAt === null) !== (x.completesAt === null) ||
+    (x.startedAt === null) !== (x.tier === null) ||
+    (x.startedAt === null) !== (x.reward === null) ||
+    (x.startedAt !== null && x.team.length === 0)
+  )
+    throw new Error('Damaged Expedition timing');
   const e = s.encounter;
   if (e !== null) {
     if (
