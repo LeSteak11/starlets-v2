@@ -1,9 +1,20 @@
 'use client';
 import Image from 'next/image';
-import { ArrowUpRight, Crosshair, Radar, Sparkles, Zap } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Crosshair,
+  Gem,
+  Radar,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { SignalOrbit } from '@/components/game/signal-orbit';
-import { BALANCE as B, INTRO_SPECIES, SPECIES, label } from '@/lib/balance';
+import { INTRO_SPECIES, SPECIES, label } from '@/lib/balance';
+import { cardCounter } from '@/lib/cards';
+import { CATALOGUE } from '@/lib/catalogue';
+import { track } from '@/lib/analytics';
+import { qualityBand } from '@/lib/flip';
 import { beginEncounter, dismissResult, scan, tether } from '@/lib/game';
 import type { Encounter, Save } from '@/lib/game';
 type Species = (typeof SPECIES)[number];
@@ -34,6 +45,7 @@ export function ScanScreen({
   setTab: (tab: 'scan' | 'book') => void;
   setSettings: (open: boolean) => void;
 }) {
+  const granted = e?.granted ? CATALOGUE.get(e.granted) : null;
   return (
     <section className="scanner-layout">
       <div className="scanner-stage">
@@ -119,7 +131,27 @@ export function ScanScreen({
             encounter={e}
             slow={state?.slowTiming ?? false}
             paused={paused}
-            onTether={(angle) => update((s) => tether(s, angle))}
+            onTether={(angle) =>
+              update((s) => {
+                const next = tether(s, angle);
+                const result = next.encounter;
+                const card = result?.granted
+                  ? CATALOGUE.get(result.granted)
+                  : null;
+                if (card && result)
+                  track({
+                    name: 'card_granted',
+                    cardId: card.cardId,
+                    rarity: card.rarity,
+                    speciesId: card.speciesId,
+                    source: result.intro ? 'intro' : 'flip',
+                    newSlot: result.newSlot,
+                    duplicate: result.duplicate,
+                    band: qualityBand(result.hits),
+                  });
+                return next;
+              })
+            }
           />
         )}
         {e?.stage === 'result' && species && (
@@ -135,40 +167,36 @@ export function ScanScreen({
             </div>
             <div className="scanner-caption" aria-live="polite">
               <p className="eyebrow">
-                {e.caught
-                  ? e.wasNew
-                    ? 'NEW STARBOOK ENTRY'
-                    : 'FAMILIAR SIGNAL RECONNECTED'
-                  : 'CONNECTION FADED'}
+                {e.newSlot
+                  ? 'NEW STARBOOK ENTRY'
+                  : e.duplicate
+                    ? 'A SECOND PRINTING'
+                    : 'NEW CARD'}
               </p>
               <h2 className="result-label">
-                {e.caught ? species.name : 'Closer next time.'}
+                {granted ? granted.name : species.name}
               </h2>
               <p>
-                {e.caught
-                  ? `${label(species.rarityBase)} · ${label(species.core)} Core · ${species.zone}`
-                  : `${species.name} slipped away. You learned its signal.`}
+                {granted
+                  ? `${granted.subtitle ? granted.subtitle + ' · ' : ''}${label(granted.rarity)} · ${cardCounter(granted)}`
+                  : `${label(species.rarityBase)} · ${label(species.core)} Core · ${species.zone}`}
               </p>
               <div className="reward-line">
-                {e.caught ? (
+                <Sparkles size={16} /> +{e.reward} Stardust{' '}
+                {e.shardReward > 0 && (
                   <>
-                    <Sparkles size={16} /> +{e.reward} Stardust{' '}
-                    {e.sparkReward > 0 && (
-                      <>
-                        <Zap size={16} /> +{e.sparkReward} Spark
-                      </>
-                    )}
+                    <Gem size={16} /> +{e.shardReward} Shards
                   </>
-                ) : (
+                )}
+                {e.sparkReward > 0 && (
                   <>
-                    +{B.familiarity.failure} Familiarity ·{' '}
-                    {state?.records[species.id].familiarity}/100
+                    <Zap size={16} /> +{e.sparkReward} Spark
                   </>
                 )}
               </div>
-              {!e.caught && state?.records[species.id].familiarity === 100 && (
+              {e.duplicate && (
                 <small>
-                  Your next encounter with {species.name} is guaranteed.
+                  You already held this printing. Duplicates mint shards.
                 </small>
               )}
               <div className="result-actions">

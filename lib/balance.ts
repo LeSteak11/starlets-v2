@@ -62,10 +62,30 @@ export const BALANCE = {
       { rare: 0.88, legendary: 0.12 },
       { rare: 0.68, legendary: 0.28, secret: 0.04 },
     ],
-    /** A secret is guaranteed within this many packs. Shown from pack 25. */
+    /** A secret is guaranteed within this many flips. Shown from flip 25. */
     secretPity: 40,
     pityVisibleFrom: 25,
+    /** Free pack every 12h, two stored. Paired with the 12h Spark refill. */
+    timerMs: 12 * 60 * 60 * 1000,
+    stored: 2,
   },
+  /**
+   * Signal Lock bands. Tether quality picks a band; the band is then snapped
+   * to the nearest printing the Starlet in the ring actually has, so a bad
+   * flip on a rare species still pays out on that species' own line. The
+   * animal never changes -- only which of its printings you get.
+   */
+  flip: {
+    bands: {
+      low: { common: 0.7, uncommon: 0.3 },
+      mid: { uncommon: 0.55, rare: 0.45 },
+      high: { rare: 0.6, legendary: 0.36, secret: 0.04 },
+    },
+    /** Share of the maximum tether score needed to reach each band. */
+    bandAt: { high: 0.85, mid: 0.5 },
+  },
+  /** Duplicates mint shards. Craft costs land with the craft UI. */
+  shards: { common: 1, uncommon: 2, rare: 3, legendary: 8, secret: 25 },
   /** Asset budgets. `npm run content:art` reports anything over. */
   art: {
     maxBytes: 250 * 1024,

@@ -1,17 +1,27 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { BookOpen, Radar, Settings2, Sparkles, Zap } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  BookOpen,
+  PackageOpen,
+  Radar,
+  Settings2,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 import Link from 'next/link';
+import { BinderScreen } from '@/components/game/binder-screen';
 import { GameDialogs } from '@/components/game/dialogs';
+import { PacksScreen } from '@/components/game/packs-screen';
 import { ScanScreen } from '@/components/game/scan-screen';
-import { StarbookScreen } from '@/components/game/starbook-screen';
 import { useSave } from '@/app/_hooks/use-save';
 import { BALANCE as B, INTRO_SPECIES, SPECIES, label } from '@/lib/balance';
-import { regenerate, scan } from '@/lib/game';
+import { CATALOGUE } from '@/lib/catalogue';
+import { track } from '@/lib/analytics';
+import { accruePacks, regenerate, scan } from '@/lib/game';
 const SET_COUNT = SPECIES.length;
 export default function Home() {
   const { save, current, error, now, update, restart } = useSave();
-  const [tab, setTab] = useState<'scan' | 'book'>('scan');
+  const [tab, setTab] = useState<'scan' | 'book' | 'packs'>('scan');
   const [settings, setSettings] = useState(false);
   const [reset, setReset] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
@@ -70,7 +80,18 @@ export default function Home() {
     }
     return () => lifecycle.abort();
   }, [current]);
-  const state = save ? regenerate(save, now) : null;
+  const started = useRef(false);
+  useEffect(() => {
+    if (!save || started.current) return;
+    started.current = true;
+    track({
+      name: 'session_start',
+      discovered: SPECIES.filter((s) => save.records[s.id].caught > 0).length,
+      owned: Object.keys(save.owned).length,
+      packsStored: save.packs.stored,
+    });
+  }, [save]);
+  const state = save ? accruePacks(regenerate(save, now), now) : null;
   const e = state?.encounter;
   const species = e
     ? (SPECIES.find((s) => s.id === e.speciesId) ?? null)
@@ -79,6 +100,7 @@ export default function Home() {
   const discovered = state
     ? SPECIES.filter((s) => state.records[s.id].caught > 0).length
     : 0;
+  const held = state ? Object.keys(state.owned).length : 0;
   const intro = (state?.introStep ?? 0) < INTRO_SPECIES.length;
   const countdown =
     state && state.sparks < B.sparks.cap
@@ -140,11 +162,13 @@ export default function Home() {
         <div>
           <p className="eyebrow">
             LUNARA /{' '}
-            {tab === 'book'
-              ? 'FIELD ARCHIVE'
-              : species && e?.stage !== 'signal'
-                ? species.zone.toUpperCase()
-                : 'DEEP SPACE SCANNER'}
+            {tab === 'packs'
+              ? 'SUPPLY DROP'
+              : tab === 'book'
+                ? 'FIELD ARCHIVE'
+                : species && e?.stage !== 'signal'
+                  ? species.zone.toUpperCase()
+                  : 'DEEP SPACE SCANNER'}
           </p>
           <h1>
             {tab === 'book'
@@ -152,9 +176,9 @@ export default function Home() {
               : e?.stage === 'lock'
                 ? 'Establish a connection.'
                 : e?.stage === 'result'
-                  ? e.caught
+                  ? e.newSlot
                     ? 'A signal. A connection.'
-                    : 'Not lost. Just learning.'
+                    : 'Another printing.'
                   : 'Follow the signal.'}
           </h1>
           <p>
@@ -186,8 +210,15 @@ export default function Home() {
           setTab={setTab}
           setSettings={setSettings}
         />
+      ) : tab === 'packs' ? (
+        <PacksScreen state={state} now={now} update={update} />
       ) : (
-        <StarbookScreen state={state} setDetail={setDetail} />
+        <BinderScreen
+          state={state}
+          onOpenCard={(cardId) =>
+            setDetail(CATALOGUE.get(cardId)?.speciesId ?? null)
+          }
+        />
       )}
       <nav className="bottom-nav" aria-label="Main navigation">
         <button
@@ -204,10 +235,18 @@ export default function Home() {
           onClick={() => setTab('book')}
         >
           <BookOpen />
-          Starbook{' '}
+          Binder{' '}
           <span>
-            {discovered}/{SET_COUNT}
+            {held}/{CATALOGUE.all.length}
           </span>
+        </button>
+        <button
+          className={tab === 'packs' ? 'active' : ''}
+          aria-current={tab === 'packs' ? 'page' : undefined}
+          onClick={() => setTab('packs')}
+        >
+          <PackageOpen />
+          Packs{state && state.packs.stored > 0 && ` · ${state.packs.stored}`}
         </button>
       </nav>
       <GameDialogs

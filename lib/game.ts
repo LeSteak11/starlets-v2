@@ -1,8 +1,9 @@
 import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
 import { CATALOGUE } from './catalogue.ts';
+import { qualityBand, printingFor, rollPack } from './flip.ts';
 export type RecordEntry = {
+  /** Flips that landed on this species. Not a gate -- a tally. */
   caught: number;
-  familiarity: number;
   speciesDust: number;
   xp: number;
   firstCaught: number | null;
@@ -26,25 +27,42 @@ export type Encounter = {
   speciesId: string;
   stage: 'signal' | 'lock' | 'result';
   intro: boolean;
-  guaranteed: boolean;
   target: number;
   phase: number;
   rolls: number[];
   hits: Quality[];
   meter: number;
-  caught: boolean;
+  /** The card this flip granted. Every flip grants one. */
+  granted: string | null;
+  /** True when this granted the first card of its species -- a new slot. */
+  newSlot: boolean;
+  /** True when the player already held this exact printing. */
+  duplicate: boolean;
   reward: number;
+  shardReward: number;
   sparkReward: number;
-  wasNew: boolean;
+};
+export type PackState = {
+  /** Free packs waiting to be opened, capped at BALANCE.packs.stored. */
+  stored: number;
+  /** When the current 12h timer started counting. */
+  accruedAt: number;
+  /** Flips since the last secret. Guarantees one at BALANCE.packs.secretPity. */
+  pity: number;
+  /** Packs opened, for the pity display and for analytics. */
+  opened: number;
 };
 export type Save = {
-  version: 2;
+  version: 3;
   sparks: number;
   regeneratedAt: number;
   stardust: number;
   introStep: number;
   records: Record<string, RecordEntry>;
   owned: Record<string, OwnedCard>;
+  packs: PackState;
+  /** Minted by duplicates. Craft lands with the craft UI. */
+  shards: number;
   encounter: Encounter | null;
   slowTiming: boolean;
 };
@@ -53,7 +71,6 @@ export const SAVE_KEY = 'starlets.phase2.v1';
 export const LEGACY_SAVE_KEY = 'starlets.phase1.v1';
 export const blankRecord = (): RecordEntry => ({
   caught: 0,
-  familiarity: 0,
   speciesDust: 0,
   xp: 0,
   firstCaught: null,
@@ -74,13 +91,15 @@ export const grantCard = (
 };
 export function newSave(now = Date.now()): Save {
   return {
-    version: 2,
+    version: 3,
     sparks: B.sparks.initial,
     regeneratedAt: now,
     stardust: 0,
     introStep: 0,
     records: Object.fromEntries(SPECIES.map((s) => [s.id, blankRecord()])),
     owned: {},
+    packs: { stored: 0, accruedAt: now, pity: 0, opened: 0 },
+    shards: 0,
     encounter: null,
     slowTiming: false,
   };
@@ -125,9 +144,6 @@ export function scan(save: Save, rng = Math.random, now = Date.now()): Save {
       speciesId: species.id,
       stage: 'signal',
       intro,
-      guaranteed:
-        intro ||
-        state.records[species.id].familiarity >= B.familiarity.guarantee,
       target: Math.floor(rng() * 360),
       phase: Math.floor(rng() * 360),
       rolls: Array.from(
@@ -137,10 +153,12 @@ export function scan(save: Save, rng = Math.random, now = Date.now()): Save {
       ),
       hits: [],
       meter: 0,
-      caught: false,
+      granted: null,
+      newSlot: false,
+      duplicate: false,
       reward: 0,
+      shardReward: 0,
       sparkReward: 0,
-      wasNew: state.records[species.id].caught === 0,
     },
   };
 }
@@ -167,7 +185,12 @@ export function qualityAt(angle: number, target: number): Quality {
       ? 'Good'
       : 'Miss';
 }
-export function tether(save: Save, angle: number, now = Date.now()): Save {
+export function tether(
+  save: Save,
+  angle: number,
+  now = Date.now(),
+  rng = Math.random,
+): Save {
   const e = save.encounter;
   if (!e || e.stage !== 'lock' || !Number.isFinite(angle)) return save;
   const quality = qualityAt(((angle % 360) + 360) % 360, e.target);
@@ -176,58 +199,163 @@ export function tether(save: Save, angle: number, now = Date.now()): Save {
     e.rolls[e.hits.length];
   const hits = [...e.hits, quality];
   const rawMeter = e.meter + gain;
-  const done =
-    rawMeter >= B.capture.threshold || hits.length >= B.capture.tethers;
-  const caught = done && (rawMeter >= B.capture.threshold || e.guaranteed);
-  let next: Encounter = {
+  const done = hits.length >= B.capture.tethers;
+  const next: Encounter = {
     ...e,
     hits,
-    meter: caught ? B.capture.threshold : rawMeter,
+    meter: Math.min(B.capture.threshold, rawMeter),
     target: (e.target + 83) % 360,
     stage: done ? 'result' : 'lock',
-    caught,
   };
   if (!done) return { ...save, encounter: next };
-  const species = SPECIES.find((s) => s.id === e.speciesId)!;
-  const old = save.records[species.id];
-  const record = { ...old };
-  let owned = save.owned;
-  let stardust = save.stardust,
-    sparks = save.sparks,
-    introStep = save.introStep;
-  if (caught) {
-    record.caught += 1;
-    record.familiarity = 0;
-    record.xp += old.caught ? B.xp.duplicate : B.xp.newCatch;
-    record.firstCaught ??= now;
-    record.speciesDust += B.stardust[species.rarityBase];
-    const base = CATALOGUE.baseFor(species.id);
-    if (base)
-      owned = grantCard(owned, base.cardId, e.intro ? 'intro' : 'catch', now);
-    stardust += B.stardust[species.rarityBase];
-    if (e.intro) {
-      sparks += B.sparks.introReward;
-      introStep += 1;
-    }
-    next = {
-      ...next,
-      reward: B.stardust[species.rarityBase],
-      sparkReward: e.intro ? B.sparks.introReward : 0,
-    };
-  } else {
-    record.familiarity = Math.min(
-      B.familiarity.guarantee,
-      record.familiarity + B.familiarity.failure,
-    );
-  }
+  // Every flip grants a card. Tether quality picks the band; the band snaps to
+  // the nearest printing this Starlet actually has. The animal never changes.
+  return grantFlip(save, next, hits, now, rng);
+}
+/** Resolves a finished flip into a card, shards, Stardust and a Starbook slot. */
+function grantFlip(
+  save: Save,
+  encounter: Encounter,
+  hits: Quality[],
+  now: number,
+  rng: () => number,
+): Save {
+  const species = SPECIES.find((s) => s.id === encounter.speciesId)!;
+  const intro = encounter.intro;
+  // The intro is scripted: the first three flips hand over the base cards.
+  const card = intro
+    ? CATALOGUE.baseFor(species.id)
+    : printingFor(CATALOGUE, species.id, qualityBand(hits), rng);
+  if (!card) return { ...save, encounter };
+  return applyGrant(save, encounter, card.cardId, intro, now);
+}
+/**
+ * Adds one granted card to the save. Shared by the ring and by packs so a
+ * Starbook slot fills the same way whatever the card came from.
+ */
+export function applyGrant(
+  save: Save,
+  encounter: Encounter | null,
+  cardId: string,
+  intro: boolean,
+  now: number,
+): Save {
+  const card = CATALOGUE.get(cardId);
+  if (!card) return save;
+  const old = save.records[card.speciesId];
+  const duplicate = !!save.owned[cardId];
+  // The slot fills the first time this species reaches the table, from any
+  // source. Owning a card is the record -- there is no separate permission.
+  const newSlot = !CATALOGUE.lineFor(card.speciesId).some(
+    (c) => save.owned[c.cardId],
+  );
+  const dust = B.stardust[card.rarity];
+  const shards = duplicate ? B.shards[card.rarity] : 0;
+  const record = {
+    ...old,
+    caught: old.caught + 1,
+    xp: old.xp + (newSlot ? B.xp.newCatch : B.xp.duplicate),
+    firstCaught: old.firstCaught ?? now,
+    speciesDust: old.speciesDust + dust,
+  };
+  const owned = grantCard(
+    save.owned,
+    cardId,
+    intro ? 'intro' : encounter ? 'catch' : 'pack',
+    now,
+  );
+  const pity = card.rarity === 'secret' ? 0 : save.packs.pity + 1;
   return {
     ...save,
-    stardust,
-    sparks,
-    introStep,
+    stardust: save.stardust + dust,
+    shards: save.shards + shards,
+    sparks: save.sparks + (intro ? B.sparks.introReward : 0),
+    introStep: save.introStep + (intro ? 1 : 0),
     owned,
-    records: { ...save.records, [species.id]: record },
-    encounter: next,
+    packs: { ...save.packs, pity },
+    records: { ...save.records, [card.speciesId]: record },
+    encounter: encounter
+      ? {
+          ...encounter,
+          granted: cardId,
+          newSlot,
+          duplicate,
+          reward: dust,
+          shardReward: shards,
+          sparkReward: intro ? B.sparks.introReward : 0,
+        }
+      : save.encounter,
+  };
+}
+/**
+ * Free packs accrue on the same 12-hour rhythm as the Spark refill, capped so
+ * the game asks for a morning and an evening session rather than a marathon.
+ * Like regenerate(), the clock only moves forward: winding the device back
+ * loses nothing and gains nothing.
+ */
+export function accruePacks(save: Save, now = Date.now()): Save {
+  if (now < save.packs.accruedAt)
+    return { ...save, packs: { ...save.packs, accruedAt: now } };
+  if (save.packs.stored >= B.packs.stored)
+    return { ...save, packs: { ...save.packs, accruedAt: now } };
+  const ticks = Math.floor((now - save.packs.accruedAt) / B.packs.timerMs);
+  if (!ticks) return save;
+  const stored = Math.min(B.packs.stored, save.packs.stored + ticks);
+  return {
+    ...save,
+    packs: {
+      ...save.packs,
+      stored,
+      accruedAt:
+        stored === B.packs.stored
+          ? now
+          : save.packs.accruedAt + ticks * B.packs.timerMs,
+    },
+  };
+}
+export type PackOpening = {
+  cardIds: string[];
+  /**
+   * The cardIds that actually filled a Starbook slot -- not the species, so a
+   * pack holding two Dewlarks flags the first and not the second.
+   */
+  newSlots: string[];
+};
+/**
+ * Opens one stored pack. Returns the save with every card granted and the
+ * opening to reveal; the UI walks the cards one at a time.
+ */
+export function openPack(
+  save: Save,
+  rng = Math.random,
+  now = Date.now(),
+): { save: Save; opening: PackOpening | null } {
+  const state = accruePacks(save, now);
+  if (state.packs.stored < 1) return { save: state, opening: null };
+  const roll = rollPack(CATALOGUE, state.packs.pity, rng);
+  let next: Save = {
+    ...state,
+    packs: {
+      ...state.packs,
+      stored: state.packs.stored - 1,
+      opened: state.packs.opened + 1,
+      // Spending a stored pack restarts the timer only if none is waiting.
+      accruedAt: state.packs.stored - 1 === 0 ? now : state.packs.accruedAt,
+    },
+  };
+  const newSlots: string[] = [];
+  for (const card of roll.cards) {
+    const before = next;
+    const filled = !CATALOGUE.lineFor(card.speciesId).some(
+      (c) => before.owned[c.cardId],
+    );
+    next = applyGrant(next, null, card.cardId, false, now);
+    if (filled) newSlots.push(card.cardId);
+  }
+  next = { ...next, packs: { ...next.packs, pity: roll.pity } };
+  return {
+    save: next,
+    opening: { cardIds: roll.cards.map((c) => c.cardId), newSlots },
   };
 }
 export function dismissResult(save: Save): Save {
@@ -243,23 +371,33 @@ const integer = (
   typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max;
 type LegacyRecord = {
   caught: number;
-  familiarity: number;
+  familiarity?: number;
   speciesDust: number;
   xp: number;
   firstCaught: number | null;
   cardIds?: unknown;
 };
 /**
- * Phase 1 -> Phase 2. Every cardIds[] entry becomes one owned copy sourced
- * from a catch. Playtest saves are migrated, never discarded; anything the
- * catalogue no longer knows about is a damaged save and still throws.
+ * Older saves -> current. Playtest saves are migrated, never discarded;
+ * anything the catalogue no longer knows about is still a damaged save.
+ *
+ * v1 -> v2: every cardIds[] entry becomes one owned copy from a catch.
+ * v2 -> v3: Familiarity is dropped (the flip always grants, so there is no
+ * permission left to build toward), and the pack timer, pity counter and
+ * shard pool start empty.
  */
 export function migrateLegacySave(raw: string, now = Date.now()): Save {
-  const legacy = JSON.parse(raw) as Omit<Save, 'version' | 'owned'> & {
+  const legacy = JSON.parse(raw) as Omit<
+    Save,
+    'version' | 'owned' | 'packs' | 'shards'
+  > & {
     version: number;
     records: Record<string, LegacyRecord>;
+    owned?: Record<string, OwnedCard>;
+    packs?: PackState;
+    shards?: number;
   };
-  if (!legacy || legacy.version !== 1 || !legacy.records)
+  if (!legacy || !legacy.records || ![1, 2].includes(legacy.version))
     throw new Error('Unrecognized save');
   let owned: Record<string, OwnedCard> = {};
   const records: Record<string, RecordEntry> = {};
@@ -268,13 +406,15 @@ export function migrateLegacySave(raw: string, now = Date.now()): Save {
     records[species.id] = r
       ? {
           caught: r.caught,
-          familiarity: r.familiarity,
           speciesDust: r.speciesDust,
           xp: r.xp,
           firstCaught: r.firstCaught,
         }
       : blankRecord();
-    const ids = Array.isArray(r?.cardIds) ? (r.cardIds as string[]) : [];
+    const ids =
+      legacy.version === 1 && Array.isArray(r?.cardIds)
+        ? (r.cardIds as string[])
+        : [];
     for (const legacyId of ids) {
       // Phase 1 ids were '<species>-default'; the base card is their heir.
       const base = CATALOGUE.baseFor(species.id);
@@ -283,14 +423,25 @@ export function migrateLegacySave(raw: string, now = Date.now()): Save {
       owned = grantCard(owned, base.cardId, 'catch', r?.firstCaught ?? now);
     }
   }
-  return parseSave(JSON.stringify({ ...legacy, version: 2, records, owned }));
+  return parseSave(
+    JSON.stringify({
+      ...legacy,
+      version: 3,
+      records,
+      // v2 already tracked ownership; v1 built it from cardIds above.
+      owned: legacy.version === 2 ? (legacy.owned ?? {}) : owned,
+      packs: legacy.packs ?? { stored: 0, accruedAt: now, pity: 0, opened: 0 },
+      shards: legacy.shards ?? 0,
+      encounter: null,
+    }),
+  );
 }
 /** Reject damaged/incompatible saves rather than silently overwriting progress. */
 export function parseSave(raw: string): Save {
   const s = JSON.parse(raw) as Save;
   if (
     !s ||
-    s.version !== 2 ||
+    s.version !== 3 ||
     !integer(s.sparks, 0) ||
     !integer(s.regeneratedAt, 0) ||
     !integer(s.stardust, 0) ||
@@ -304,13 +455,22 @@ export function parseSave(raw: string): Save {
     if (
       !r ||
       !integer(r.caught, 0) ||
-      !integer(r.familiarity, 0, 100) ||
       !integer(r.speciesDust, 0) ||
       !integer(r.xp, 0) ||
       !(r.firstCaught === null || integer(r.firstCaught, 0))
     )
       throw new Error('Damaged Starbook');
   }
+  const p = s.packs;
+  if (
+    !p ||
+    !integer(p.stored, 0, B.packs.stored) ||
+    !integer(p.accruedAt, 0) ||
+    !integer(p.pity, 0) ||
+    !integer(p.opened, 0) ||
+    !integer(s.shards, 0)
+  )
+    throw new Error('Damaged pack state');
   if (!s.owned || typeof s.owned !== 'object' || Array.isArray(s.owned))
     throw new Error('Damaged collection');
   for (const [cardId, o] of Object.entries(s.owned)) {
@@ -345,10 +505,11 @@ export function parseSave(raw: string): Save {
       !integer(e.meter, 0, B.capture.threshold) ||
       !integer(e.reward, 0) ||
       !integer(e.sparkReward, 0) ||
-      [e.intro, e.guaranteed, e.caught, e.wasNew].some(
-        (v) => typeof v !== 'boolean',
-      ) ||
-      (e.stage === 'lock' && e.hits.length >= B.capture.tethers)
+      [e.intro, e.newSlot, e.duplicate].some((v) => typeof v !== 'boolean') ||
+      !(e.granted === null || CATALOGUE.byId.has(e.granted)) ||
+      !integer(e.shardReward, 0) ||
+      (e.stage === 'lock' && e.hits.length >= B.capture.tethers) ||
+      (e.stage === 'result' && e.granted === null && !e.intro)
     )
       throw new Error('Damaged encounter');
   }

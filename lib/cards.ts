@@ -91,12 +91,15 @@ export type Catalogue = ReturnType<typeof buildCatalogue>;
 export type BinderPage = { zone: Zone; cards: readonly StarletCard[] };
 export function binderPages(cards: readonly StarletCard[]): BinderPage[] {
   const zones = [...new Set(SPECIES.map((s) => s.zone))] as Zone[];
-  return zones.map((zone) => ({
-    zone,
-    cards: cards
-      .filter((c) => c.zone === zone && c.number !== null)
-      .sort((a, b) => a.number! - b.number!),
-  }));
+  return zones
+    .map((zone) => ({
+      zone,
+      cards: cards
+        .filter((c) => c.zone === zone && c.number !== null)
+        .sort((a, b) => a.number! - b.number!),
+    }))
+    // Pages run in card order, not roster order: page 1 is 001-009.
+    .sort((a, b) => (a.cards[0]?.number ?? 0) - (b.cards[0]?.number ?? 0));
 }
 /** The unlisted chase tray, in set order. */
 export const secretTray = (cards: readonly StarletCard[]) =>

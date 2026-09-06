@@ -16,12 +16,15 @@ import {
   weightedSpecies,
   migrateLegacySave,
   grantCard,
+  accruePacks,
+  openPack,
 } from './game.ts';
+import { printingFor, qualityBand, rollPack, snapToLine } from './flip.ts';
 import type { Save } from './game.ts';
 const rng = () => 0.5;
 function finish(s: Save, perfect = false) {
   while (s.encounter?.stage === 'lock')
-    s = tether(s, (s.encounter.target + (perfect ? 0 : 180)) % 360, 1000);
+    s = tether(s, (s.encounter.target + (perfect ? 0 : 180)) % 360, 1000, rng);
   return s;
 }
 function normal() {
@@ -35,10 +38,10 @@ void test('intro is free, guarantees all three catches, and grants bounded rewar
     s = beginEncounter(s, 1000);
     assert.equal(s.sparks, 6 + i);
     s = finish(s);
-    assert.equal(s.encounter?.caught, true);
+    assert.equal(s.encounter?.newSlot, true);
     assert.equal(s.sparks, 7 + i);
     const settled = s;
-    assert.deepEqual(tether(s, 0), settled);
+    assert.deepEqual(tether(s, 0, 1000, rng), settled);
     const base = CATALOGUE.baseFor(SPECIES[i].id)!.cardId;
     assert.equal(s.owned[base].count, 1);
     assert.equal(s.owned[base].source, 'intro');
@@ -57,35 +60,58 @@ void test('scan preview is free, start spends once, and save resumes exact activ
   s = beginEncounter(s, 1000);
   assert.equal(s.sparks, 5);
   assert.deepEqual(beginEncounter(s, 1000), s);
-  s = tether(s, s.encounter!.target, 1000);
+  s = tether(s, s.encounter!.target, 1000, rng);
   assert.deepEqual(parseSave(JSON.stringify(s)), s);
 });
-void test('four failures grant 100 Familiarity; next same-species encounter guarantees and resets', () => {
+void test('a bad flip still grants a card, on that species own line', () => {
   let s = normal();
-  for (let i = 1; i <= 4; i++) {
-    s = finish(beginEncounter(scan(s, rng, 1000), 1000));
-    assert.equal(s.encounter?.caught, false);
-    assert.equal(s.records.novafox.familiarity, i * 25);
-    s = dismissResult(s);
-  }
-  s = beginEncounter(scan(s, rng, 1000), 1000);
-  assert.equal(s.encounter?.guaranteed, true);
-  s = finish(s);
-  assert.equal(s.encounter?.caught, true);
-  assert.equal(s.records.novafox.familiarity, 0);
+  s = finish(beginEncounter(scan(s, rng, 1000), 1000));
+  const e = s.encounter!;
+  // Every flip grants. There is no failed catch and no empty-handed result.
+  assert.ok(e.granted);
+  const card = CATALOGUE.get(e.granted!)!;
+  assert.equal(card.speciesId, e.speciesId);
+  assert.ok(e.reward > 0);
+  assert.equal(e.newSlot, true);
 });
-void test('accurate timing catches normally; duplicates preserve history and Card ownership', () => {
+void test('quality bands map to the species own printings, never to another animal', () => {
+  assert.equal(qualityBand(['Miss', 'Miss', 'Miss', 'Miss']), 'low');
+  assert.equal(qualityBand(['Good', 'Good', 'Good', 'Good']), 'mid');
+  assert.equal(qualityBand(['Perfect', 'Perfect', 'Perfect']), 'high');
+  // Glimmerelk prints rare, legendary and secret -- there is no bad one.
+  const elk = CATALOGUE.lineFor('glimmerelk');
+  assert.equal(snapToLine(elk, 'common'), 'rare');
+  assert.equal(snapToLine(elk, 'uncommon'), 'rare');
+  assert.equal(snapToLine(elk, 'legendary'), 'legendary');
+  // Mossbun has no secret, so the top band snaps back down its own line.
+  assert.equal(snapToLine(CATALOGUE.lineFor('mossbun'), 'secret'), 'rare');
+  // Ties resolve toward the commoner side: snapping never quietly promotes.
+  assert.equal(
+    snapToLine(CATALOGUE.lineFor('selenith'), 'common'),
+    'legendary',
+  );
+  for (const band of ['low', 'mid', 'high'] as const)
+    for (const species of SPECIES) {
+      const card = printingFor(CATALOGUE, species.id, band, () => 0.5);
+      assert.ok(card, species.id);
+      assert.equal(card!.speciesId, species.id);
+    }
+});
+void test('duplicates raise the count and mint shards rather than paying nothing', () => {
   let s = finish(beginEncounter(scan(normal(), rng, 1000), 1000), true);
-  assert.equal(s.encounter?.caught, true);
-  assert.equal(s.records.novafox.xp, 50);
+  const first = s.encounter!.granted!;
+  assert.equal(s.encounter?.newSlot, true);
+  assert.equal(s.encounter?.duplicate, false);
+  assert.equal(s.shards, 0);
   s = finish(beginEncounter(scan(dismissResult(s), rng, 1000), 1000), true);
   assert.equal(s.records.novafox.caught, 2);
-  assert.equal(s.records.novafox.xp, 70);
-  // Two catches, one Starbook slot, two copies held.
-  assert.equal(Object.keys(s.owned).length, 1);
-  assert.equal(s.owned[CATALOGUE.baseFor('novafox')!.cardId].count, 2);
+  // A second flip on a fixed rng lands the same printing: a real duplicate.
+  assert.equal(s.encounter?.granted, first);
+  assert.equal(s.encounter?.duplicate, true);
+  assert.equal(s.encounter?.newSlot, false);
+  assert.ok(s.shards > 0);
+  assert.equal(s.owned[first].count, 2);
   assert.equal(s.records.novafox.firstCaught, 1000);
-  assert.equal(s.stardust, 80);
 });
 void test('zero Sparks retains mystery signal until regeneration permits encounter', () => {
   let s = scan({ ...normal(), sparks: 0 }, rng, 1000);
@@ -120,13 +146,76 @@ void test('invalid saves are rejected without replacing data', () => {
     '{',
     'null',
     '{}',
-    JSON.stringify({ ...newSave(), version: 3 }),
-    JSON.stringify({ ...newSave(), version: 1 }),
+    JSON.stringify({ ...newSave(), version: 4 }),
+    JSON.stringify({ ...newSave(), version: 2 }),
     JSON.stringify({ ...newSave(), owned: [] }),
+    JSON.stringify({ ...newSave(), packs: null }),
+    JSON.stringify({ ...newSave(), shards: -1 }),
     JSON.stringify({ ...newSave(), sparks: -1 }),
     JSON.stringify({ ...newSave(), encounter: {} }),
   ])
     assert.throws(() => parseSave(raw));
+});
+void test('packs accrue every 12h to a cap, and the clock only moves forward', () => {
+  const start = newSave(0);
+  assert.equal(start.packs.stored, 0);
+  assert.equal(accruePacks(start, B.packs.timerMs - 1).packs.stored, 0);
+  assert.equal(accruePacks(start, B.packs.timerMs).packs.stored, 1);
+  assert.equal(accruePacks(start, B.packs.timerMs * 2).packs.stored, 2);
+  // Capped: a week away is still two packs, not seven.
+  assert.equal(
+    accruePacks(start, B.packs.timerMs * 14).packs.stored,
+    B.packs.stored,
+  );
+  // Winding the device clock backwards neither grants nor removes a pack.
+  const ahead = accruePacks(start, B.packs.timerMs);
+  assert.equal(accruePacks(ahead, 0).packs.stored, 1);
+});
+void test('opening a pack spends one, grants five cards, and fills slots', () => {
+  let save = accruePacks(newSave(0), B.packs.timerMs * 2);
+  assert.equal(save.packs.stored, 2);
+  const { save: after, opening } = openPack(save, () => 0.5, 1000);
+  assert.ok(opening);
+  assert.equal(opening!.cardIds.length, B.packs.size);
+  assert.equal(after.packs.stored, 1);
+  assert.equal(after.packs.opened, 1);
+  // Every card lands in the collection, dupes as counts.
+  const held = Object.values(after.owned).reduce((n, o) => n + o.count, 0);
+  assert.equal(held, B.packs.size);
+  // Packs may hand over a species the player has never flipped. That is a
+  // silhouette filling in, not a locked slot.
+  assert.ok(opening!.newSlots.length > 0);
+  // Each flagged card is the one that filled its slot -- a second copy of the
+  // same species in the same pack is not a second new entry.
+  const flaggedSpecies = opening!.newSlots.map(
+    (cardId) => CATALOGUE.get(cardId)!.speciesId,
+  );
+  assert.equal(new Set(flaggedSpecies).size, flaggedSpecies.length);
+  for (const speciesId of flaggedSpecies)
+    assert.equal(after.records[speciesId].caught > 0, true);
+  save = after;
+  const empty = openPack(openPack(save, () => 0.5, 2000).save, () => 0.5, 2000);
+  assert.equal(empty.opening, null);
+});
+void test('pack slots honour their guarantees, and pity delivers a secret by 40', () => {
+  let rolls = 0;
+  const cycling = () => (rolls++ * 0.37) % 1;
+  for (let i = 0; i < 200; i++) {
+    const { cards } = rollPack(CATALOGUE, 0, cycling);
+    assert.equal(cards.length, B.packs.size);
+    for (const card of cards.slice(0, 3))
+      assert.ok(['common', 'uncommon'].includes(card.rarity), card.cardId);
+    assert.ok(['rare', 'legendary'].includes(cards[3].rarity), cards[3].cardId);
+    assert.ok(cards[4].rarity !== 'common');
+  }
+  // At the floor the hit slot is forced, whatever the dice say.
+  const forced = rollPack(CATALOGUE, B.packs.secretPity - 1, () => 0.999999);
+  assert.equal(forced.cards[4].rarity, 'secret');
+  assert.ok(forced.hitSecret);
+  assert.equal(forced.pity, 0);
+  // And a dry run keeps counting rather than resetting.
+  const dry = rollPack(CATALOGUE, 10, () => 0);
+  assert.equal(dry.pity, 15);
 });
 void test('Set 01 is three pages of nine plus an unlisted secret tray', () => {
   assert.equal(SPECIES.length, B.set01.species);
@@ -148,6 +237,12 @@ void test('Set 01 is three pages of nine plus an unlisted secret tray', () => {
   // Every zone is exactly one 3x3 page; secrets sit on none of them.
   const pages = binderPages(SET_01);
   assert.equal(pages.length, 3);
+  // Pages run in card order: page 1 opens on 001, not on whichever zone the
+  // roster happens to list first.
+  assert.deepEqual(
+    pages.map((page) => page.cards[0].number),
+    [1, 10, 19],
+  );
   for (const page of pages)
     assert.equal(page.cards.length, B.set01.pageSize, page.zone);
   assert.equal(
@@ -287,7 +382,7 @@ void test('Phase 1 saves migrate forward instead of being discarded', () => {
     },
   };
   const save = migrateLegacySave(JSON.stringify(legacy), 999);
-  assert.equal(save.version, 2);
+  assert.equal(save.version, 3);
   assert.equal(save.stardust, 60);
   assert.equal(save.sparks, 4);
   assert.equal(save.records.mossbun.caught, 3);
@@ -298,7 +393,12 @@ void test('Phase 1 saves migrate forward instead of being discarded', () => {
   assert.equal(save.owned[base].firstObtainedAt, 42);
   assert.equal(save.owned[base].source, 'catch');
   assert.equal(Object.keys(save.owned).length, 1);
-  assert.throws(() => migrateLegacySave(JSON.stringify({ version: 2 })));
+  // Familiarity is gone, and the Phase 2 state starts empty rather than absent.
+  assert.ok(!('familiarity' in save.records.mossbun));
+  assert.equal(save.shards, 0);
+  assert.equal(save.packs.stored, 0);
+  assert.equal(save.packs.pity, 0);
+  assert.throws(() => migrateLegacySave(JSON.stringify({ version: 4 })));
 });
 void test('an owned card the catalogue does not know is a damaged save', () => {
   const save = newSave(0);

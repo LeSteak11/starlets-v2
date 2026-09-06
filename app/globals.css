@@ -724,3 +724,168 @@ small {
     height: 250px;
   }
 }
+
+/* --- Binder: three fixed 3x3 pages, one per zone, plus the chase tray --- */
+.binder {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.binder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.binder-head div {
+  text-align: center;
+}
+.binder-head h2 {
+  margin: 2px 0;
+  font-size: 22px;
+}
+.binder-page {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.tray-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 10px;
+}
+.chase-tray {
+  border-top: 1px dashed #32415a;
+  padding-top: 18px;
+}
+.binder-slot {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  border: 1px solid #32415a;
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 0;
+  background: radial-gradient(ellipse at 50% 25%, #263b4a, #101827 70%);
+  color: #ecf3ff;
+}
+.binder-slot.empty {
+  border-style: dashed;
+  background: #0d1421;
+}
+.binder-slot .card-art {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+.binder-slot .card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.slot-number,
+.slot-count {
+  position: absolute;
+  top: 6px;
+  font:
+    600 10px/1 ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  background: #0b111ccc;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.slot-number {
+  left: 6px;
+}
+.slot-count {
+  right: 6px;
+}
+.slot-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 8px 6px;
+  font-size: 11px;
+  text-align: center;
+  background: linear-gradient(to top, #0b111ce6, transparent);
+}
+/* Rarity is a border tint, not a badge -- the art stays the loudest thing. */
+.rarity-uncommon {
+  border-color: #6fd39b;
+}
+.rarity-rare {
+  border-color: #6fb2ff;
+}
+.rarity-legendary {
+  border-color: #ffcf6f;
+}
+.rarity-secret {
+  border-color: #d59bff;
+}
+.binder-slot.empty.rarity-uncommon,
+.binder-slot.empty.rarity-rare,
+.binder-slot.empty.rarity-legendary,
+.binder-slot.empty.rarity-secret {
+  border-color: #32415a;
+}
+
+/* --- Packs --- */
+.packs-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: start;
+}
+.odds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font:
+    500 12px/1.6 ui-monospace,
+    monospace;
+  margin: 10px 0;
+}
+.odds-table th,
+.odds-table td {
+  text-align: right;
+  padding: 4px 6px;
+  border-bottom: 1px solid #23304a;
+}
+.odds-table th:first-child,
+.odds-table td:first-child {
+  text-align: left;
+}
+.pack-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.reveal-card {
+  width: min(280px, 70vw);
+  aspect-ratio: 5 / 7;
+  border: 2px solid #32415a;
+  border-radius: 18px;
+  overflow: hidden;
+}
+.reveal-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+@media (max-width: 860px) {
+  .packs-layout {
+    grid-template-columns: 1fr;
+  }
+}
+/* Never hidden on small screens: "two slots left on page 2" is the motivator. */
+.page-count {
+  display: inline-block;
+  font: 600 12px/1 ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  color: #a5b1c5;
+}

@@ -152,11 +152,9 @@ export function SignalOrbit({
           <br />
           The bright center gives a Perfect lock.
         </p>
-        {encounter.guaranteed && (
+        {encounter.intro && (
           <small>
-            {encounter.intro
-              ? 'First contact assistance · Catch guaranteed'
-              : 'Full Familiarity · Catch guaranteed'}
+            First contact · This Starlet&apos;s base card is guaranteed
           </small>
         )}
       </div>

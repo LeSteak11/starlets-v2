@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { BALANCE as B, SPECIES, label } from '@/lib/balance';
+import { CATALOGUE } from '@/lib/catalogue';
 import type { Encounter, Save } from '@/lib/game';
 type Species = (typeof SPECIES)[number];
 export function GameDialogs({
@@ -110,7 +111,10 @@ export function GameDialogs({
             state &&
             (() => {
               const r = state.records[selected.id];
-              const known = r.caught > 0 || r.familiarity > 0;
+              const line = CATALOGUE.lineFor(selected.id);
+              const held = line.filter((c) => state.owned[c.cardId]);
+              // The slot is filled the moment any card of this species lands.
+              const known = r.caught > 0;
               return (
                 <>
                   <DialogTitle>
@@ -135,7 +139,7 @@ export function GameDialogs({
                   <p className="dialog-copy">
                     {r.caught
                       ? selected.lore
-                      : 'Follow its signal from the Scanner. Failed encounters build Familiarity toward a guaranteed catch.'}
+                      : 'Follow its signal from the Scanner, or open a pack. Every flip grants a card.'}
                   </p>
                   <div className="detail-grid">
                     <div>
@@ -143,8 +147,8 @@ export function GameDialogs({
                       {r.caught}
                     </div>
                     <div>
-                      <small>Familiarity</small>
-                      {r.familiarity}/100
+                      <small>Cards held</small>
+                      {held.length}/{line.length}
                     </div>
                     {r.caught > 0 && (
                       <div>
