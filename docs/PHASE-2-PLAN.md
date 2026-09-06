@@ -19,7 +19,9 @@ v2.0 scoped Phase 2 as progression plus a path toward Star Trials. That is cance
 
 ### Keep
 
-Signal Lock as the capture verb — it is the best thing in the build. Sparks as energy. Familiarity pity. Starbook as the home of the product. Pure `Save → Save` logic, strict `parseSave`, local-first. Mossbun / Novafox / Emberpanda as the tutorial set.
+Signal Lock as the flip with a skill ring — it is the best thing in the build. Sparks as energy. Starbook as the home of the product. Pure `Save → Save` logic, strict `parseSave`, local-first. Mossbun / Novafox / Emberpanda as the tutorial set.
+
+**Superseded 2026-09-06:** ~~Familiarity pity~~ — the flip always grants a card, so a per-species pity toward "permission to catch" has nothing left to guarantee. Pity now lives on the flip counter (secret within 40). Do not run both.
 
 ### Cut or freeze until after revenue
 
@@ -28,6 +30,29 @@ Star Trials, combat stats, the Core matchup triangle, Abilities, Signature Moves
 ### Deliberate exception: Cores survive as identity
 
 The memo cuts "Core triangle." That kills the **matchup math**, not the Cores. Grove / Tide / Flare are already shipping as visual identity — icons, per-species colors, Starbook labels — and a collection game needs taxonomy for binder sorting and set structure. **Cores stay as a cosmetic and organizational axis with zero mechanical effect.** Nothing to build; just do not rip them out with the battle code.
+
+### Superseded 2026-09-06: catch-as-key is cut
+
+Everything below that reads as *a catch unlocks a species and packs grant the
+alts* describes a model that no longer exists. The corrected model:
+
+- **A flip always grants a card.** There is no failed catch and no empty-handed
+  encounter.
+- **The Starbook slot fills the first time that `speciesId` reaches the table**,
+  from any source. That is the unlock. Owning a card is the record; there is no
+  separate permission to collect a species.
+- **Signal Lock is an extra flip that costs 1 Spark.** Tether quality weights
+  the rarity table. It does not grant permission to use the catalogue.
+- **The 12-hour pack is the same flip without the ring.**
+- **Zones weight which species can appear.** They are not keys.
+- **The intro still scripts the first three flips**, so the Mossbun, Emberpanda
+  and Novafox bases are guaranteed.
+- **Packs may roll a species the player has never seen.** A silhouette until
+  the first card lands is correct. A dead slot until they grind scans is not.
+
+Where §5.2 says "Every catch contributes" toward a bonus pack, read "every
+flip". Where §10.1 speaks of migrating Phase 1 catch records into card
+ownership, that migration shipped and is unaffected.
 
 ---
 
@@ -174,7 +199,7 @@ Finish rolls independently per card: **Matte 87% / Foil 11% / Prism 2%.** Epic a
 | Streak rewards | See §6 |
 | Set completion, milestones | Fixed grants |
 
-The 12-hour timer and the 12-hour Spark refill are deliberately aligned: **the game asks for a morning session and an evening session.** Sparks gate catching, the pack timer gates pulling, and they refill on the same rhythm so neither becomes the sole bottleneck.
+The 12-hour timer and the 12-hour Spark refill are deliberately aligned: **the game asks for a morning session and an evening session.** Sparks gate the ring flip, the pack timer gates the free flip, and they refill on the same rhythm so neither becomes the sole bottleneck.
 
 ### 5.3 The opening is the feature
 

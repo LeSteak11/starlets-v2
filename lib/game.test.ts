@@ -171,6 +171,29 @@ void test('Set 01 is three pages of nine plus an unlisted secret tray', () => {
     assert.notEqual(CATALOGUE.baseFor(species.id)!.number, null);
   }
 });
+void test('four landed tethers always catch, at worst-case variance', () => {
+  const { perfect, good, miss, variance, threshold, tethers } = B.capture;
+  const points = { Perfect: perfect, Good: good, Miss: miss };
+  const worst = (seq: (keyof typeof points)[]) => {
+    let meter = 0;
+    for (const hit of seq) {
+      meter += points[hit] - variance;
+      if (meter >= threshold) return true;
+    }
+    return false;
+  };
+  // The floor of the promise: four Goods, every roll against the player.
+  assert.equal(good * tethers - variance * tethers, threshold);
+  assert.ok(worst(['Good', 'Good', 'Good', 'Good']));
+  assert.ok(worst(['Good', 'Good', 'Good', 'Perfect']));
+  assert.ok(worst(['Perfect', 'Perfect', 'Perfect']));
+  // Dropping one tether is survivable, but only with accuracy behind it.
+  assert.ok(worst(['Perfect', 'Perfect', 'Good', 'Miss']));
+  assert.ok(!worst(['Perfect', 'Good', 'Good', 'Miss']));
+  // And a genuinely bad run still fails, or accuracy would mean nothing.
+  assert.ok(!worst(['Good', 'Good', 'Good', 'Miss']));
+  assert.ok(!worst(['Miss', 'Miss', 'Miss', 'Miss']));
+});
 void test('pack slots 1-3 never roll rare, and every slot is a real distribution', () => {
   assert.equal(B.packs.slots.length, B.packs.size);
   for (const slot of B.packs.slots) {
