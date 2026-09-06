@@ -1,4 +1,5 @@
-import { BALANCE as B, SPECIES } from './balance.ts';
+import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
+import { CARDS_BY_ID, baseCardFor } from './cards.ts';
 export type RecordEntry = {
   caught: number;
   familiarity: number;
@@ -71,16 +72,23 @@ export function regenerate(save: Save, now = Date.now()): Save {
         : save.regeneratedAt + ticks * B.sparks.regenerationMs,
   };
 }
+/** Rarity has to be felt in the scan pool, not just printed on the card. */
+export function weightedSpecies(roll: number) {
+  const total = SPECIES.reduce((sum, s) => sum + s.encounterWeight, 0);
+  let cursor = Math.min(Math.max(roll, 0), 0.999999) * total;
+  for (const species of SPECIES) {
+    cursor -= species.encounterWeight;
+    if (cursor < 0) return species;
+  }
+  return SPECIES[0];
+}
 export function scan(save: Save, rng = Math.random, now = Date.now()): Save {
   if (save.encounter) return save;
   const state = regenerate(save, now);
-  const intro = state.introStep < SPECIES.length;
-  const species =
-    SPECIES[
-      intro
-        ? state.introStep
-        : Math.min(SPECIES.length - 1, Math.floor(rng() * SPECIES.length))
-    ];
+  const intro = state.introStep < INTRO_SPECIES.length;
+  const species = intro
+    ? INTRO_SPECIES[state.introStep]
+    : weightedSpecies(rng());
   return {
     ...state,
     encounter: {
@@ -162,8 +170,8 @@ export function tether(save: Save, angle: number, now = Date.now()): Save {
     record.xp += old.caught ? B.xp.duplicate : B.xp.newCatch;
     record.firstCaught ??= now;
     record.speciesDust += B.stardust[species.rarity];
-    if (!record.cardIds.includes(`${species.id}-default`))
-      record.cardIds.push(`${species.id}-default`);
+    const base = baseCardFor(species.id).id;
+    if (!record.cardIds.includes(base)) record.cardIds.push(base);
     stardust += B.stardust[species.rarity];
     if (e.intro) {
       sparks += B.sparks.introReward;
@@ -209,7 +217,7 @@ export function parseSave(raw: string): Save {
     !integer(s.sparks, 0) ||
     !integer(s.regeneratedAt, 0) ||
     !integer(s.stardust, 0) ||
-    !integer(s.introStep, 0, 3) ||
+    !integer(s.introStep, 0, INTRO_SPECIES.length) ||
     typeof s.slowTiming !== 'boolean' ||
     !s.records
   )
@@ -224,7 +232,9 @@ export function parseSave(raw: string): Save {
       !integer(r.xp, 0) ||
       !(r.firstCaught === null || integer(r.firstCaught, 0)) ||
       !Array.isArray(r.cardIds) ||
-      r.cardIds.some((id) => id !== `${species.id}-default`)
+      r.cardIds.some(
+        (id) => CARDS_BY_ID.get(id)?.speciesId !== species.id,
+      )
     )
       throw new Error('Damaged Starbook');
   }

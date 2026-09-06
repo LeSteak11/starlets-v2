@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Artwork pending">
+  <rect width="512" height="512" rx="32" fill="#12121b"/>
+  <rect x="8" y="8" width="496" height="496" rx="26" fill="none" stroke="#3b3b52" stroke-width="3" stroke-dasharray="14 12"/>
+  <circle cx="256" cy="222" r="86" fill="#22223a"/>
+  <path d="M256 322c-72 0-118 44-126 92h252c-8-48-54-92-126-92z" fill="#22223a"/>
+  <text x="256" y="452" text-anchor="middle" font-family="system-ui, sans-serif" font-size="26" fill="#5b5b78">ART PENDING</text>
+</svg>

@@ -21,83 +21,164 @@ export const BALANCE = {
     orbitMs: 2600,
     slowOrbitMs: 4500,
   },
-  stardust: { Common: 20, Rare: 40, Epic: 80, Legendary: 160 },
-  xp: { newCatch: 50, duplicate: 20, levelCap: 30 },
-  launch: {
-    defaultCards: { Common: 9, Rare: 5, Epic: 3, Legendary: 1 },
-    alternateCards: { Common: 3, Rare: 2, Epic: 1, Legendary: 0 },
+  stardust: {
+    Common: 20,
+    Uncommon: 30,
+    Rare: 40,
+    Legendary: 160,
+    Secret: 240,
   },
-  potential: { Common: 44, Rare: 50, Epic: 56, Legendary: 62 },
-  riseMultiplier: { Origin: 1, Rise: 1.12, Zenith: 1.25 },
-  trainingPerLevel: 0.8,
+  xp: { newCatch: 50, duplicate: 20, levelCap: 30 },
+  /** Set 01 shape. The set data in cards.ts is asserted against these. */
+  set01: {
+    cards: 28,
+    species: 8,
+    byRarity: { Common: 5, Uncommon: 6, Rare: 9, Legendary: 5, Secret: 3 },
+  },
 } as const;
-export type Rarity = keyof typeof BALANCE.potential;
+/** Card rarity. Species carry the same scale, minus Secret: no species is Secret-only. */
+export type Rarity = keyof typeof BALANCE.stardust;
+export type SpeciesRarity = Exclude<Rarity, 'Secret'>;
 export type Core = 'Grove' | 'Tide' | 'Flare';
+export type Zone = 'Moon Garden' | 'Crater Coast' | 'Prism Caves';
+/**
+ * Set 01 roster: 8 Starlets, frozen. Species count does not rise until the
+ * binder and the pack timer exist. Names and art here are placeholders pending
+ * final design; the rarity spine is the lock.
+ *
+ * `intro` marks the three tutorial catches, in order. The mascot is deliberately
+ * not one of them -- players should see its silhouette for weeks.
+ * `encounterWeight` biases the scan pool so rarity is felt, not just labelled.
+ */
 export const SPECIES = [
   {
     id: 'mossbun',
     name: 'Mossbun',
     number: '001',
-    rarity: 'Common' as Rarity,
+    rarity: 'Common' as SpeciesRarity,
     core: 'Grove' as Core,
-    zone: 'Moon Garden',
+    zone: 'Moon Garden' as Zone,
     color: '#b9f77e',
     signalStyle: 'Steady drift',
     speed: 1,
+    intro: true,
+    encounterWeight: 26,
     lore: 'It listens through the moss on its ears. When the garden falls silent, it hears the stars.',
     signature: 'Verdant Echo',
     art: '/creatures/mossbun.png',
   },
   {
+    id: 'emberpanda',
+    name: 'Emberpanda',
+    number: '002',
+    rarity: 'Common' as SpeciesRarity,
+    core: 'Flare' as Core,
+    zone: 'Prism Caves' as Zone,
+    color: '#ffb67e',
+    signalStyle: 'Solar pulse',
+    speed: 1.08,
+    intro: true,
+    encounterWeight: 24,
+    lore: 'A quiet keeper of borrowed sunlight. The embers in its coat stay warm through Lunara’s longest nights.',
+    signature: 'Sunburst',
+    art: '/creatures/placeholder.svg',
+  },
+  {
     id: 'novafox',
     name: 'Novafox',
-    number: '002',
-    rarity: 'Rare' as Rarity,
+    number: '003',
+    rarity: 'Rare' as SpeciesRarity,
     core: 'Tide' as Core,
-    zone: 'Crater Coast',
+    zone: 'Crater Coast' as Zone,
     color: '#8cdaff',
     signalStyle: 'Tidal surge',
     speed: 1.18,
+    intro: true,
+    encounterWeight: 9,
     lore: 'Its flowing tail traces tides that no ocean remembers. It appears where moonlight touches still water.',
     signature: 'Comet Dash',
     art: '/creatures/novafox.png',
   },
   {
-    id: 'emberpanda',
-    name: 'Emberpanda',
-    number: '003',
-    rarity: 'Common' as Rarity,
+    id: 'dewlark',
+    name: 'Dewlark',
+    number: '004',
+    rarity: 'Common' as SpeciesRarity,
+    core: 'Grove' as Core,
+    zone: 'Moon Garden' as Zone,
+    color: '#a7e8bd',
+    signalStyle: 'Scattered flutter',
+    speed: 1.04,
+    intro: false,
+    encounterWeight: 26,
+    lore: 'It drinks the dew that collects on fallen starlight, and sings only where nobody is listening.',
+    signature: 'Morning Chorus',
+    art: '/creatures/placeholder.svg',
+  },
+  {
+    id: 'shellune',
+    name: 'Shellune',
+    number: '005',
+    rarity: 'Uncommon' as SpeciesRarity,
+    core: 'Tide' as Core,
+    zone: 'Crater Coast' as Zone,
+    color: '#9fc7ff',
+    signalStyle: 'Slow swell',
+    speed: 0.94,
+    intro: false,
+    encounterWeight: 8,
+    lore: 'Its shell keeps the shape of every tide it has outlived. Hold it to your ear and the crater answers.',
+    signature: 'Pearl Current',
+    art: '/creatures/placeholder.svg',
+  },
+  {
+    id: 'cindermoth',
+    name: 'Cindermoth',
+    number: '006',
+    rarity: 'Uncommon' as SpeciesRarity,
     core: 'Flare' as Core,
-    zone: 'Prism Caves',
-    color: '#ffb67e',
-    signalStyle: 'Solar pulse',
-    speed: 1.08,
-    lore: 'A quiet keeper of borrowed sunlight. The embers in its coat stay warm through Lunara’s longest nights.',
-    signature: 'Sunburst',
-    art: '/favicon.svg',
+    zone: 'Prism Caves' as Zone,
+    color: '#ffa8a0',
+    signalStyle: 'Guttering flicker',
+    speed: 1.22,
+    intro: false,
+    encounterWeight: 6,
+    lore: 'Drawn to any light it did not make. Its wings leave warm ash on the cave walls it passes.',
+    signature: 'Ash Bloom',
+    art: '/creatures/placeholder.svg',
+  },
+  {
+    id: 'glimmerelk',
+    name: 'Glimmerelk',
+    number: '007',
+    rarity: 'Rare' as SpeciesRarity,
+    core: 'Grove' as Core,
+    zone: 'Moon Garden' as Zone,
+    color: '#d9c6ff',
+    signalStyle: 'Long resonance',
+    speed: 1.1,
+    intro: false,
+    encounterWeight: 1,
+    lore: 'Its antlers hold light the way a riverbed holds water. Whole seasons pass between sightings.',
+    signature: 'Antler Dawn',
+    art: '/creatures/placeholder.svg',
+  },
+  {
+    id: 'selenith',
+    name: 'Selenith',
+    number: '008',
+    rarity: 'Legendary' as SpeciesRarity,
+    core: 'Tide' as Core,
+    zone: 'Crater Coast' as Zone,
+    color: '#f2e9ff',
+    signalStyle: 'Unbroken tone',
+    speed: 1.3,
+    intro: false,
+    encounterWeight: 0.2,
+    lore: 'The moon that Lunara was named for walks its own coast. Nobody agrees on what it looks like up close.',
+    signature: 'Crown of Lunara',
+    art: '/creatures/placeholder.svg',
   },
 ] as const;
-export const DEFAULT_CARDS = SPECIES.map((s) => ({
-  id: `${s.id}-default`,
-  speciesId: s.id,
-  core: s.core,
-  art: s.art,
-  signature: s.signature,
-}));
-/** Cards never enter this calculation. Training can outweigh the rarity gap. */
-export function developedPotential(
-  rarity: Rarity,
-  level: number,
-  form: keyof typeof BALANCE.riseMultiplier,
-) {
-  return Math.min(
-    100,
-    Math.round(
-      (BALANCE.potential[rarity] +
-        (Math.max(1, Math.min(level, BALANCE.xp.levelCap)) - 1) *
-          BALANCE.trainingPerLevel) *
-        BALANCE.riseMultiplier[form],
-    ),
-  );
-}
-
+/** The tutorial is three catches. It does not grow with the roster. */
+export const INTRO_SPECIES = SPECIES.filter((s) => s.intro);

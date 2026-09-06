@@ -31,7 +31,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { BALANCE as B, SPECIES, developedPotential } from '@/lib/balance';
+import { BALANCE as B, SPECIES } from '@/lib/balance';
 import {
   newSave,
   parseSave,
@@ -850,16 +850,10 @@ export default function Home() {
                       {r.familiarity}/100
                     </div>
                     {r.caught > 0 && (
-                      <>
-                        <div>
-                          <small>Species Stardust</small>
-                          {r.speciesDust}
-                        </div>
-                        <div>
-                          <small>Base Potential</small>
-                          {developedPotential(selected.rarity, 1, 'Origin')}
-                        </div>
-                      </>
+                      <div>
+                        <small>Species Stardust</small>
+                        {r.speciesDust}
+                      </div>
                     )}
                   </div>
                   {r.caught > 0 && (
@@ -873,7 +867,7 @@ export default function Home() {
                         {new Date(r.firstCaught!).toLocaleDateString()}
                       </p>
                       <small>
-                        Level growth, Star Rise, and battle moves arrive in
+                        Alternate printings, packs, and the binder arrive in
                         later phases.
                       </small>
                     </>

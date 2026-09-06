@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  BALANCE as B,
-  developedPotential,
-  DEFAULT_CARDS,
-  SPECIES,
-} from './balance.ts';
+import { BALANCE as B, INTRO_SPECIES, SPECIES } from './balance.ts';
+import { BINDER_PAGES, SET_01, baseCardFor, cardNumber } from './cards.ts';
 import {
   newSave,
   scan,
@@ -15,6 +11,7 @@ import {
   regenerate,
   parseSave,
   qualityAt,
+  weightedSpecies,
 } from './game.ts';
 import type { Save } from './game.ts';
 const rng = () => 0.5;
@@ -121,17 +118,55 @@ void test('invalid saves are rejected without replacing data', () => {
   ])
     assert.throws(() => parseSave(raw));
 });
-void test('species rarity owns potential; launch totals and trained Common viability hold', () => {
-  const totals = { Common: 12, Rare: 7, Epic: 4, Legendary: 1 };
-  for (const rarity of Object.keys(totals) as (keyof typeof totals)[])
-    assert.equal(
-      B.launch.defaultCards[rarity] + B.launch.alternateCards[rarity],
-      totals[rarity],
-    );
-  assert.ok(DEFAULT_CARDS.every((c) => !('rarity' in c) && !('stats' in c)));
-  assert.ok(
-    developedPotential('Common', 30, 'Zenith') >
-      developedPotential('Legendary', 1, 'Origin'),
+void test('Set 01 holds its locked shape: 8 Starlets, 28 cards, one base each', () => {
+  assert.equal(SPECIES.length, B.set01.species);
+  assert.equal(SET_01.length, B.set01.cards);
+  assert.equal(INTRO_SPECIES.length, 3);
+  // The set boss is never a tutorial catch -- it stays a silhouette for weeks.
+  assert.ok(!INTRO_SPECIES.map((s) => s.id as string).includes('selenith'));
+  const counted: Record<string, number> = {};
+  for (const c of SET_01) counted[c.rarity] = (counted[c.rarity] ?? 0) + 1;
+  assert.deepEqual(counted, { ...B.set01.byRarity });
+  for (const species of SPECIES) {
+    const line = SET_01.filter((c) => c.speciesId === species.id);
+    assert.ok(line.length >= 3, species.id);
+    assert.equal(line.filter((c) => c.kind === 'base').length, 1, species.id);
+    assert.equal(baseCardFor(species.id).speciesId, species.id);
+  }
+  // Secrets are printings of somebody already in the book, never new species.
+  for (const secret of SET_01.filter((c) => c.rarity === 'Secret'))
+    assert.ok(SPECIES.some((s) => s.id === secret.speciesId));
+  assert.equal(cardNumber(SET_01[0]), 'LUN/01');
+  assert.equal(cardNumber(SET_01[27]), 'LUN/28');
+  assert.equal(
+    BINDER_PAGES.reduce((n, page) => n + page.cards.length, 0),
+    SET_01.length,
   );
-  assert.ok(developedPotential('Legendary', 30, 'Zenith') <= 100);
+});
+void test('alts may outrank their base, and only 001/002/004 start Common', () => {
+  const commonBases = SET_01.filter(
+    (c) => c.kind === 'base' && c.rarity === 'Common',
+  ).map((c) => c.speciesId);
+  assert.deepEqual(commonBases, ['mossbun', 'emberpanda', 'dewlark']);
+  const emberpanda = SET_01.filter((c) => c.speciesId === 'emberpanda');
+  assert.equal(emberpanda.find((c) => c.kind === 'base')!.rarity, 'Common');
+  assert.ok(emberpanda.some((c) => c.rarity === 'Secret'));
+  // The set boss has no Common and no Uncommon printing.
+  assert.ok(
+    !SET_01.filter((c) => c.speciesId === 'selenith').some((c) =>
+      ['Common', 'Uncommon'].includes(c.rarity),
+    ),
+  );
+});
+void test('scan weights rarity: the mascot is not a routine encounter', () => {
+  assert.equal(weightedSpecies(0).id, 'mossbun');
+  assert.equal(weightedSpecies(0.999999).id, 'selenith');
+  const counts = new Map<string, number>();
+  for (let i = 0; i < 10000; i++) {
+    const id = weightedSpecies(i / 10000).id;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  assert.ok(counts.get('selenith')! < counts.get('glimmerelk')!);
+  assert.ok(counts.get('glimmerelk')! < counts.get('mossbun')!);
+  assert.equal(counts.size, SPECIES.length);
 });
