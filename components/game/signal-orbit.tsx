@@ -132,7 +132,7 @@ export function SignalOrbit({
         <Progress
           className="capture-progress"
           value={(encounter.meter / B.capture.threshold) * 100}
-          aria-label="Catch meter"
+          aria-label="Signal stability"
         />
         <p className="quality" aria-live="polite">
           {encounter.hits.length

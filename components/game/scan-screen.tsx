@@ -82,7 +82,7 @@ export function ScanScreen({
               </button>
               <small>
                 {intro
-                  ? 'Introductory encounters are free · +1 Spark per catch'
+                  ? 'Introductory flips are free · +1 Spark each'
                   : countdown
                     ? `${state?.sparks} Sparks available · Next Spark in ${countdown}m`
                     : `${state?.sparks} Sparks available · Reserve full`}
@@ -230,8 +230,8 @@ export function ScanScreen({
           </h2>
           <p>
             {intro
-              ? 'Start with three free contacts. Each catch adds a Starlet, Stardust, and a Spark to your reserve.'
-              : 'Return to familiar signals to gather Stardust and record more catches.'}
+              ? 'Start with three free contacts. Each one adds a Starlet, Stardust, and a Spark to your reserve.'
+              : 'Every flip grants a card. Accuracy decides which printing.'}
           </p>
           <div className="metric">
             {String(discovered).padStart(2, '0')}{' '}
@@ -252,16 +252,17 @@ export function ScanScreen({
         <article className="panel note">
           <Sparkles size={22} />
           <h3>
-            {e?.stage === 'lock' ? 'Read the orbit.' : 'Every signal counts.'}
+            {e?.stage === 'lock' ? 'Read the orbit.' : 'Every flip pays.'}
           </h3>
           {e?.stage === 'lock' ? (
             <>
               <p>
-                Four tethers to reach 100%. Bright green is Perfect. The target
-                shifts after every shot.
+                Four tethers. Bright green is Perfect. The target shifts after
+                every shot.
               </p>
               <p>
-                Signal strength varies slightly. Accuracy gives you the edge.
+                You always come away with a card. Accuracy decides which of this
+                Starlet&apos;s printings you get.
               </p>
               <button className="text-button" onClick={() => setSettings(true)}>
                 Adjust timing
@@ -269,8 +270,9 @@ export function ScanScreen({
             </>
           ) : (
             <p>
-              A missed catch earns 25 Familiarity. At 100, the next encounter
-              with that species is guaranteed.
+              Every flip grants a card. A clean run reaches the better
+              printings; a poor one still pays out on that Starlet&apos;s own
+              line.
             </p>
           )}
         </article>
